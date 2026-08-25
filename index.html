@@ -1119,6 +1119,7 @@ const storage = {
     localStorage.setItem(key, JSON.stringify(value));
     // LocalStorage stays the single source of truth for the app; this only
     // schedules an optional, best-effort mirror of the data to Supabase.
+    if(typeof markSijilDirty==='function') markSijilDirty();
     if(typeof scheduleSupabaseAutoBackup==='function') scheduleSupabaseAutoBackup();
   }
 };
@@ -1134,6 +1135,8 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const SIJIL_BACKUP_TABLE = 'sijil_backups';
 const LS_SYNC_ID = 'sijil_supabase_sync_id_v1';
 const LS_AUTOSYNC = 'sijil_supabase_autosync_v1';
+const LS_LAST_APPLIED_REMOTE = 'sijil_last_applied_remote_v1'; // updated_at of the remote row this device's data currently matches
+const LS_DIRTY = 'sijil_local_dirty_v1'; // '1' whenever this device has local changes not yet pushed
 
 let sbClient = null;
 try{
@@ -1150,22 +1153,25 @@ function getSyncId(){
 function setSyncId(v){ localStorage.setItem(LS_SYNC_ID, (v||'').trim() || 'default'); }
 function isAutoSyncEnabled(){ return localStorage.getItem(LS_AUTOSYNC) !== '0'; } // on by default
 
-// Snapshots every sijil_* key currently in LocalStorage (raw JSON strings,
-// as stored) except the sync-settings keys themselves.
 function collectSijilSnapshot(){
   const data = {};
+  const skip = [LS_SYNC_ID, LS_AUTOSYNC, LS_LAST_APPLIED_REMOTE, LS_DIRTY];
   for(let i=0;i<localStorage.length;i++){
     const k = localStorage.key(i);
-    if(k && k.indexOf('sijil_')===0 && k!==LS_SYNC_ID && k!==LS_AUTOSYNC) data[k] = localStorage.getItem(k);
+    if(k && k.indexOf('sijil_')===0 && skip.indexOf(k)===-1) data[k] = localStorage.getItem(k);
   }
   return data;
 }
 // Restores a previously-collected snapshot back into LocalStorage.
 function applySijilSnapshot(data){
+  const skip = [LS_SYNC_ID, LS_AUTOSYNC, LS_LAST_APPLIED_REMOTE, LS_DIRTY];
   Object.keys(data||{}).forEach(k=>{
-    if(k.indexOf('sijil_')===0) localStorage.setItem(k, data[k]);
+    if(k.indexOf('sijil_')===0 && skip.indexOf(k)===-1) localStorage.setItem(k, data[k]);
   });
 }
+function isSijilDirty(){ return localStorage.getItem(LS_DIRTY)==='1'; }
+function markSijilDirty(){ localStorage.setItem(LS_DIRTY, '1'); }
+function clearSijilDirty(){ localStorage.setItem(LS_DIRTY, '0'); }
 function formatSyncTime(iso){
   try{ return new Date(iso).toLocaleString('ar-EG', { dateStyle:'medium', timeStyle:'short' }); }catch(e){ return iso; }
 }
@@ -1178,8 +1184,13 @@ let sbAutoBackupTimer = null;
 function scheduleSupabaseAutoBackup(){
   if(!sbClient || !isAutoSyncEnabled()) return;
   clearTimeout(sbAutoBackupTimer);
-  sbAutoBackupTimer = setTimeout(()=>{ pushBackupToSupabase(true); }, 4000);
+  sbAutoBackupTimer = setTimeout(()=>{ sbAutoBackupTimer = null; pushBackupToSupabase(true); }, 1500);
 }
+// Best-effort: if the tab is closed/hidden before the debounce timer fires,
+// push immediately instead of losing the pending change entirely.
+window.addEventListener('pagehide', function(){
+  if(sbAutoBackupTimer){ clearTimeout(sbAutoBackupTimer); sbAutoBackupTimer = null; pushBackupToSupabase(true); }
+});
 
 async function pushBackupToSupabase(silent){
   if(!sbClient){ if(!silent) toast('تعذّر الاتصال بمكتبة Supabase — تحقق من الاتصال بالإنترنت'); return; }
@@ -1187,6 +1198,10 @@ async function pushBackupToSupabase(silent){
     const payload = { id: getSyncId(), data: collectSijilSnapshot(), updated_at: new Date().toISOString() };
     const { error } = await sbClient.from(SIJIL_BACKUP_TABLE).upsert(payload, { onConflict:'id' });
     if(error) throw error;
+    // Local data now exactly matches what was just pushed, so it's no
+    // longer "ahead of" Supabase and no longer needs a manual merge.
+    localStorage.setItem(LS_LAST_APPLIED_REMOTE, payload.updated_at);
+    clearSijilDirty();
     setSyncStatus('آخر نسخة احتياطية: ' + formatSyncTime(payload.updated_at));
     if(!silent) toast('تم رفع نسخة احتياطية إلى Supabase بنجاح');
   }catch(e){
@@ -1203,6 +1218,8 @@ async function pullBackupFromSupabase(){
     if(error) throw error;
     if(!data){ toast('لا توجد نسخة احتياطية محفوظة بهذا المعرّف بعد'); return; }
     applySijilSnapshot(data.data);
+    localStorage.setItem(LS_LAST_APPLIED_REMOTE, data.updated_at);
+    clearSijilDirty();
     toast('تمت الاستعادة من Supabase — يُعاد تحميل الصفحة الآن');
     setTimeout(()=>location.reload(), 900);
   }catch(e){
@@ -1216,10 +1233,45 @@ async function refreshSyncStatusDisplay(){
   try{
     const { data, error } = await sbClient.from(SIJIL_BACKUP_TABLE).select('updated_at').eq('id', getSyncId()).maybeSingle();
     if(error) throw error;
-    setSyncStatus(data ? ('آخر نسخة احتياطية محفوظة: ' + formatSyncTime(data.updated_at)) : 'لا توجد نسخة احتياطية محفوظة بعد بهذا المعرّف.');
+    if(!data){ setSyncStatus('لا توجد نسخة احتياطية محفوظة بعد بهذا المعرّف.'); return; }
+    if(isSijilDirty()){
+      setSyncStatus('لديك تعديلات محلية على هذا الجهاز — سيتم رفعها تلقائياً خلال ثوانٍ (آخر نسخة على Supabase: ' + formatSyncTime(data.updated_at) + ')');
+    } else {
+      setSyncStatus('آخر نسخة احتياطية محفوظة: ' + formatSyncTime(data.updated_at));
+    }
   }catch(e){
     setSyncStatus('تعذّر التحقق من حالة المزامنة مع Supabase.');
   }
+}
+
+// Runs once on page load. If this device has no unsynced local edits and
+// Supabase holds a newer snapshot than what this device last applied (e.g.
+// an employee was added from another device), pull it in automatically so
+// every device converges without anyone having to press "استعادة" manually.
+// If this device *does* have unsynced local edits, it never overwrites them
+// silently — it only surfaces a status message so the admin can decide.
+async function checkForRemoteUpdatesOnLoad(){
+  if(!sbClient || !isAutoSyncEnabled()) return;
+  try{
+    const { data, error } = await sbClient.from(SIJIL_BACKUP_TABLE).select('data, updated_at').eq('id', getSyncId()).maybeSingle();
+    if(error || !data) return;
+    const lastApplied = localStorage.getItem(LS_LAST_APPLIED_REMOTE);
+    const remoteIsNewer = !lastApplied || new Date(data.updated_at) > new Date(lastApplied);
+    if(!remoteIsNewer) return;
+    if(isSijilDirty()){
+      // Don't clobber local changes that haven't been pushed yet — the
+      // scheduled auto-backup (or a manual push) will reconcile this soon.
+      return;
+    }
+    applySijilSnapshot(data.data);
+    localStorage.setItem(LS_LAST_APPLIED_REMOTE, data.updated_at);
+    clearSijilDirty();
+    // LS_LAST_APPLIED_REMOTE is updated before reloading, so once the page
+    // comes back up this same snapshot no longer looks "newer" — safe from
+    // reload loops even if this check runs again right after (e.g. via the
+    // visibility-change listener).
+    location.reload();
+  }catch(e){ /* Silent — this is a best-effort background check. */ }
 }
 
 function initSupabaseSyncSettings(){
@@ -3588,6 +3640,10 @@ renderTxView();
 renderEmployees();
 renderReportsSetup();
 renderSettingsView();
+checkForRemoteUpdatesOnLoad();
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState==='visible') checkForRemoteUpdatesOnLoad();
+});
 </script>
 </body>
 </html>
