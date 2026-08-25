@@ -9,6 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
     --ink:#161B22;
@@ -968,6 +969,27 @@
         <div class="section-title" style="margin:18px 0 6px;font-size:13.5px;">التعديلات المؤقتة المسجّلة</div>
         <div id="sched-ovr-list" class="holiday-list"></div>
       </div>
+
+      <div class="card" style="margin-top:18px;">
+        <h2>المزامنة الاحتياطية (Supabase)</h2>
+        <p class="hint" style="margin:-4px 0 12px;">نسخة احتياطية اختيارية لبيانات النظام على قاعدة بيانات Supabase — لأخذ نسخة آمنة أو لمزامنة نفس البيانات بين أكثر من جهاز يستخدم نفس المعرّف أدناه. البيانات المحلية على هذا الجهاز (LocalStorage) تبقى دائماً المصدر الأساسي الذي يعمل عليه النظام، ولن يتأثر عمله إن تعطّل الاتصال بالإنترنت أو بـ Supabase.</p>
+        <div class="settings-inline" style="margin-top:0;padding-top:0;border-top:none;">
+          <div class="field">
+            <label>معرّف النسخة الاحتياطية</label>
+            <input id="sb-sync-id" placeholder="default">
+            <span class="hint">استخدم نفس المعرّف بالضبط على كل جهاز تريد مزامنته مع هذه النسخة</span>
+          </div>
+          <label class="checkbox-row" style="display:flex;align-items:center;gap:8px;align-self:flex-end;margin-bottom:13px;">
+            <input type="checkbox" id="sb-autosync-toggle">
+            <span>نسخ احتياطي تلقائي بعد كل تعديل</span>
+          </label>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;">
+          <button class="btn btn-primary btn-sm" id="sb-push-btn" type="button">نسخ احتياطي الآن</button>
+          <button class="btn btn-ghost btn-sm" id="sb-pull-btn" type="button">استعادة من Supabase</button>
+        </div>
+        <div class="hint" id="sb-sync-status" style="margin-top:10px;">جارٍ التحقق من حالة المزامنة...</div>
+      </div>
     </section>
 
   </main>
@@ -1093,8 +1115,129 @@ const LS_TX  = 'sijil_transactions_v1';
 // JSON.stringify pattern used everywhere below, unified in one place.
 const storage = {
   getJSON(key, fallback){ try{ return JSON.parse(localStorage.getItem(key)) || fallback; }catch(e){ return fallback; } },
-  setJSON(key, value){ localStorage.setItem(key, JSON.stringify(value)); }
+  setJSON(key, value){
+    localStorage.setItem(key, JSON.stringify(value));
+    // LocalStorage stays the single source of truth for the app; this only
+    // schedules an optional, best-effort mirror of the data to Supabase.
+    if(typeof scheduleSupabaseAutoBackup==='function') scheduleSupabaseAutoBackup();
+  }
 };
+
+/* ---- Supabase backup/sync (optional — LocalStorage stays primary) ----
+   The whole app reads/writes exclusively through `storage` above (backed by
+   LocalStorage), so nothing else changes. This module only mirrors every
+   'sijil_*' LocalStorage key to a single row in Supabase, so the data can be
+   restored on this device or pulled onto another device sharing the same
+   sync id. If Supabase is unreachable, the app keeps working normally. */
+const SUPABASE_URL = 'https://olbzltitrwskzcycvfwm.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9sYnpsdGl0cndza3pjeWN2ZndtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2NzI4MDksImV4cCI6MjEwMzI0ODgwOX0.dD03kDX__xZP9cZyaOrvpcd3X-WOEgJmtD6DXdyZiJQ';
+const SIJIL_BACKUP_TABLE = 'sijil_backups';
+const LS_SYNC_ID = 'sijil_supabase_sync_id_v1';
+const LS_AUTOSYNC = 'sijil_supabase_autosync_v1';
+
+let sbClient = null;
+try{
+  if(window.supabase && window.supabase.createClient){
+    sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+}catch(e){ sbClient = null; }
+
+function getSyncId(){
+  const el = document.getElementById('sb-sync-id');
+  const fromField = el ? el.value.trim() : '';
+  return fromField || localStorage.getItem(LS_SYNC_ID) || 'default';
+}
+function setSyncId(v){ localStorage.setItem(LS_SYNC_ID, (v||'').trim() || 'default'); }
+function isAutoSyncEnabled(){ return localStorage.getItem(LS_AUTOSYNC) !== '0'; } // on by default
+
+// Snapshots every sijil_* key currently in LocalStorage (raw JSON strings,
+// as stored) except the sync-settings keys themselves.
+function collectSijilSnapshot(){
+  const data = {};
+  for(let i=0;i<localStorage.length;i++){
+    const k = localStorage.key(i);
+    if(k && k.indexOf('sijil_')===0 && k!==LS_SYNC_ID && k!==LS_AUTOSYNC) data[k] = localStorage.getItem(k);
+  }
+  return data;
+}
+// Restores a previously-collected snapshot back into LocalStorage.
+function applySijilSnapshot(data){
+  Object.keys(data||{}).forEach(k=>{
+    if(k.indexOf('sijil_')===0) localStorage.setItem(k, data[k]);
+  });
+}
+function formatSyncTime(iso){
+  try{ return new Date(iso).toLocaleString('ar-EG', { dateStyle:'medium', timeStyle:'short' }); }catch(e){ return iso; }
+}
+function setSyncStatus(text){
+  const el = document.getElementById('sb-sync-status');
+  if(el) el.textContent = text;
+}
+
+let sbAutoBackupTimer = null;
+function scheduleSupabaseAutoBackup(){
+  if(!sbClient || !isAutoSyncEnabled()) return;
+  clearTimeout(sbAutoBackupTimer);
+  sbAutoBackupTimer = setTimeout(()=>{ pushBackupToSupabase(true); }, 4000);
+}
+
+async function pushBackupToSupabase(silent){
+  if(!sbClient){ if(!silent) toast('تعذّر الاتصال بمكتبة Supabase — تحقق من الاتصال بالإنترنت'); return; }
+  try{
+    const payload = { id: getSyncId(), data: collectSijilSnapshot(), updated_at: new Date().toISOString() };
+    const { error } = await sbClient.from(SIJIL_BACKUP_TABLE).upsert(payload, { onConflict:'id' });
+    if(error) throw error;
+    setSyncStatus('آخر نسخة احتياطية: ' + formatSyncTime(payload.updated_at));
+    if(!silent) toast('تم رفع نسخة احتياطية إلى Supabase بنجاح');
+  }catch(e){
+    setSyncStatus('فشلت آخر محاولة نسخ احتياطي: ' + (e && e.message ? e.message : 'خطأ غير معروف'));
+    if(!silent) toast('تعذّر رفع النسخة الاحتياطية إلى Supabase');
+  }
+}
+
+async function pullBackupFromSupabase(){
+  if(!sbClient){ toast('تعذّر الاتصال بمكتبة Supabase — تحقق من الاتصال بالإنترنت'); return; }
+  if(!confirm('سيتم استبدال كل البيانات المحلية الحالية على هذا الجهاز بالنسخة المخزَّنة في Supabase بنفس المعرّف. هل تريد المتابعة؟')) return;
+  try{
+    const { data, error } = await sbClient.from(SIJIL_BACKUP_TABLE).select('data, updated_at').eq('id', getSyncId()).maybeSingle();
+    if(error) throw error;
+    if(!data){ toast('لا توجد نسخة احتياطية محفوظة بهذا المعرّف بعد'); return; }
+    applySijilSnapshot(data.data);
+    toast('تمت الاستعادة من Supabase — يُعاد تحميل الصفحة الآن');
+    setTimeout(()=>location.reload(), 900);
+  }catch(e){
+    toast('تعذّرت عملية الاستعادة من Supabase');
+  }
+}
+
+async function refreshSyncStatusDisplay(){
+  if(!sbClient){ setSyncStatus('تعذّر تحميل مكتبة Supabase — تحقق من الاتصال بالإنترنت.'); return; }
+  setSyncStatus('جارٍ التحقق من حالة المزامنة...');
+  try{
+    const { data, error } = await sbClient.from(SIJIL_BACKUP_TABLE).select('updated_at').eq('id', getSyncId()).maybeSingle();
+    if(error) throw error;
+    setSyncStatus(data ? ('آخر نسخة احتياطية محفوظة: ' + formatSyncTime(data.updated_at)) : 'لا توجد نسخة احتياطية محفوظة بعد بهذا المعرّف.');
+  }catch(e){
+    setSyncStatus('تعذّر التحقق من حالة المزامنة مع Supabase.');
+  }
+}
+
+function initSupabaseSyncSettings(){
+  const idInput = document.getElementById('sb-sync-id');
+  const autoToggle = document.getElementById('sb-autosync-toggle');
+  const pushBtn = document.getElementById('sb-push-btn');
+  const pullBtn = document.getElementById('sb-pull-btn');
+  idInput.value = localStorage.getItem(LS_SYNC_ID) || 'default';
+  autoToggle.checked = isAutoSyncEnabled();
+  if(!pushBtn.dataset.bound){
+    pushBtn.dataset.bound = '1';
+    idInput.addEventListener('input', function(){ setSyncId(this.value); });
+    autoToggle.addEventListener('change', function(){ localStorage.setItem(LS_AUTOSYNC, this.checked ? '1' : '0'); });
+    pushBtn.addEventListener('click', function(){ pushBackupToSupabase(false); });
+    pullBtn.addEventListener('click', function(){ pullBackupFromSupabase(); });
+  }
+  refreshSyncStatusDisplay();
+}
 
 function loadEmployees(){ return storage.getJSON(LS_EMP, []); }
 function saveEmployees(){ storage.setJSON(LS_EMP, employees); }
@@ -2173,6 +2316,7 @@ function renderSettingsView(){
   initHolidaySettings();
   initIntervalRuleSettings();
   initScheduleOverrideSettings();
+  initSupabaseSyncSettings();
 }
 
 // Employee-list picker dedicated to the comprehensive PDF export — lets the
