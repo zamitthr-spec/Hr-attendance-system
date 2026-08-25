@@ -1,0 +1,3449 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>سجل — نظام الحضور والانصراف</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;700;800&family=Tajawal:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --ink:#161B22;
+    --ink-soft:#2A3341;
+    --bg:#EEF1F5;
+    --surface:#FFFFFF;
+    --surface-alt:#F3F5F8;
+    --line:#DCE1E8;
+    --teal:#25604F;
+    --teal-dark:#194438;
+    --teal-tint:#E6EFEC;
+    --gold:#A9791F;
+    --gold-tint:#F5EDDA;
+    --rust:#9B3E2A;
+    --rust-tint:#F6E7E3;
+    --muted:#6B7480;
+    --font-display:'Cairo',sans-serif;
+    --font-body:'Tajawal',sans-serif;
+    --font-mono:'IBM Plex Mono',monospace;
+    --radius:8px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:var(--font-body);
+    background:var(--bg);
+    color:var(--ink);
+    min-height:100vh;
+  }
+  ::selection{background:var(--teal);color:#fff;}
+  a{color:inherit;}
+  button{font-family:inherit;cursor:pointer;}
+  input,select,textarea{font-family:inherit;}
+  :focus-visible{outline:2px solid var(--teal);outline-offset:2px;}
+
+  .app{display:flex;min-height:100vh;}
+
+  /* Sidebar */
+  .sidebar{
+    width:250px;flex:0 0 250px;
+    background:var(--ink);
+    color:#EDEFF2;
+    display:flex;flex-direction:column;
+    padding:22px 16px;
+    position:sticky;top:0;height:100vh;
+  }
+  .brand{display:flex;align-items:center;gap:10px;padding:4px 8px 22px 8px;border-bottom:1px solid rgba(255,255,255,.09);margin-bottom:18px;}
+  .brand-mark{
+    width:38px;height:38px;border-radius:50%;
+    border:2px solid var(--gold);
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--font-display);font-weight:800;color:var(--gold);
+    font-size:15px;flex:none;
+  }
+  .brand-text .t1{font-family:var(--font-display);font-weight:800;font-size:16.5px;line-height:1.1;}
+  .brand-text .t2{font-size:11px;color:#9AA3AF;margin-top:2px;}
+
+  /* Mobile nav toggle + overlay (hidden on desktop) */
+  .menu-toggle{
+    display:none;align-items:center;justify-content:center;
+    width:38px;height:38px;flex:none;border-radius:8px;
+    background:transparent;border:1px solid var(--line);color:var(--ink);
+    font-size:18px;line-height:1;
+  }
+  .menu-toggle:hover{border-color:var(--teal);color:var(--teal-dark);}
+  .sidebar-overlay{
+    display:none;position:fixed;inset:0;background:rgba(22,27,34,.5);z-index:39;
+  }
+  .sidebar-overlay.show{display:block;}
+  .sidebar-close{
+    display:none;background:none;border:none;color:#C6CCD4;font-size:20px;
+    line-height:1;cursor:pointer;margin-inline-start:auto;
+  }
+
+  nav.navlist{display:flex;flex-direction:column;gap:4px;flex:1;}
+  .navitem{
+    display:flex;align-items:center;gap:10px;
+    padding:11px 12px;border-radius:7px;
+    color:#C6CCD4;font-size:14.5px;font-weight:500;
+    border:none;background:transparent;text-align:right;width:100%;
+    transition:background .15s,color .15s;
+  }
+  .navitem .ic{width:18px;text-align:center;font-size:15px;flex:none;}
+  .navitem:hover{background:rgba(255,255,255,.06);color:#fff;}
+  .navitem.active{background:var(--teal);color:#fff;}
+  .sidebar-foot{font-size:11px;color:#7D8792;padding:12px 8px 2px;border-top:1px solid rgba(255,255,255,.09);margin-top:12px;}
+
+  /* Main */
+  .main{flex:1;min-width:0;display:flex;flex-direction:column;}
+  .topbar{
+    background:var(--surface);border-bottom:1px solid var(--line);
+    padding:16px 28px;display:flex;align-items:center;justify-content:space-between;
+    position:sticky;top:0;z-index:5;
+  }
+  .topbar h1{font-family:var(--font-display);font-size:19px;margin:0;font-weight:800;}
+  .topbar .sub{font-size:12.5px;color:var(--muted);margin-top:2px;}
+  .topbar .topbar-left{display:flex;align-items:center;gap:12px;min-width:0;}
+  .topbar .topbar-left > div{min-width:0;}
+  .topbar h1, .topbar .sub{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .today-chip{
+    background:var(--teal-tint);color:var(--teal-dark);
+    font-family:var(--font-mono);font-size:12.5px;font-weight:600;
+    padding:7px 13px;border-radius:20px;flex:none;
+  }
+
+  .view{display:none;padding:26px 28px 60px;}
+  .view.active{display:block;}
+
+  /* ===================== Responsive layout ===================== */
+  @media (max-width:900px){
+    .app{display:block;}
+    .menu-toggle{display:inline-flex;}
+    .sidebar-close{display:inline-block;}
+    .sidebar{
+      position:fixed;top:0;bottom:0;right:0;height:100vh;z-index:40;
+      width:82vw;max-width:280px;flex:none;
+      transform:translateX(100%);transition:transform .22s ease;
+      box-shadow:-8px 0 30px rgba(0,0,0,.25);
+    }
+    html[dir="rtl"] .sidebar, .sidebar{right:0;left:auto;}
+    .sidebar.open{transform:translateX(0);}
+    .main{width:100%;}
+    .topbar{padding:14px 16px;}
+    .topbar h1{font-size:16.5px;}
+    .view{padding:18px 14px 48px;}
+    .grid.cols-4{grid-template-columns:1fr 1fr;gap:10px;}
+    .grid.cols-2{grid-template-columns:1fr;}
+    .card{padding:15px;}
+    .filter-bar{padding:12px;gap:10px;}
+    .filter-bar .field{min-width:140px;}
+    .filter-bar .field.grow{min-width:100%;}
+    .modal-box{padding:16px;max-height:92vh;}
+    .toolbar{align-items:stretch;}
+    .toolbar .actions{width:100%;}
+    .toolbar .actions .btn{flex:1;}
+  }
+  @media (max-width:480px){
+    .grid.cols-4{grid-template-columns:1fr 1fr;}
+    .stat-card .value{font-size:22px;}
+    .topbar h1{font-size:15px;}
+    .today-chip{font-size:11px;padding:6px 10px;}
+    .btn{padding:9px 14px;font-size:12.8px;}
+    .emp-card{flex-wrap:wrap;}
+  }
+
+  /* Cards & grid */
+  .grid{display:grid;gap:16px;}
+  .grid.cols-4{grid-template-columns:repeat(4,1fr);}
+  .grid.cols-2{grid-template-columns:1fr 1fr;}
+  @media (max-width:1000px){.grid.cols-4{grid-template-columns:repeat(2,1fr);} .grid.cols-2{grid-template-columns:1fr;}}
+  @media (max-width:560px){.grid.cols-4{grid-template-columns:1fr 1fr;gap:10px;}}
+
+  .card{
+    background:var(--surface);border:1px solid var(--line);
+    border-radius:var(--radius);padding:20px;
+  }
+  .card h2{font-family:var(--font-display);font-size:15.5px;margin:0 0 14px;font-weight:700;}
+  .card h2 .cnt{font-family:var(--font-mono);color:var(--muted);font-weight:500;font-size:12.5px;}
+
+  .stat-card{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:18px 18px 16px;position:relative;overflow:hidden;
+  }
+  .stat-card .label{font-size:12.5px;color:var(--muted);font-weight:500;}
+  .stat-card .value{font-family:var(--font-mono);font-size:26px;font-weight:600;margin-top:6px;color:var(--ink);}
+  .stat-card .foot{font-size:11.5px;color:var(--muted);margin-top:5px;}
+  .stat-card.accent-gold{border-top:3px solid var(--gold);}
+  .stat-card.accent-teal{border-top:3px solid var(--teal);}
+  .stat-card.accent-rust{border-top:3px solid var(--rust);}
+  .stat-card.accent-ink{border-top:3px solid var(--ink-soft);}
+
+  /* Forms */
+  .field{display:flex;flex-direction:column;gap:5px;margin-bottom:13px;}
+  .field label{font-size:12.5px;font-weight:600;color:var(--ink-soft);}
+  .field .hint{font-size:11px;color:var(--muted);font-weight:400;}
+  .field input, .field select, .field textarea{
+    border:1px solid var(--line);border-radius:6px;padding:9px 11px;
+    font-size:14px;background:var(--surface-alt);color:var(--ink);width:100%;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{background:#fff;border-color:var(--teal);}
+  .field textarea{resize:vertical;min-height:56px;}
+  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media (max-width:700px){.form-row{grid-template-columns:1fr;}}
+
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:7px;
+    border:1px solid transparent;border-radius:7px;padding:10px 18px;
+    font-size:13.5px;font-weight:700;font-family:var(--font-body);
+  }
+  .btn-primary{background:var(--teal);color:#fff;}
+  .btn-primary:hover{background:var(--teal-dark);}
+  .btn-ghost{background:transparent;border-color:var(--line);color:var(--ink-soft);}
+  .btn-ghost:hover{border-color:var(--teal);color:var(--teal-dark);}
+  .btn-danger{background:transparent;color:var(--rust);border-color:var(--rust-tint);font-weight:600;padding:6px 11px;font-size:12.5px;}
+  .btn-danger:hover{background:var(--rust-tint);}
+  .btn-sm{padding:7px 12px;font-size:12.5px;}
+  .btn-block{width:100%;}
+  .btn:disabled{opacity:.45;cursor:not-allowed;}
+
+  /* Table (ledger style) */
+  .table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);}
+  table{width:100%;border-collapse:collapse;font-size:13px;min-width:760px;}
+  thead th{
+    background:var(--ink);color:#EDEFF2;text-align:right;
+    font-family:var(--font-display);font-weight:700;font-size:11.8px;
+    padding:10px 12px;white-space:nowrap;position:sticky;top:0;
+  }
+  tbody td{padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap;}
+  tbody tr:nth-child(even){background:var(--surface-alt);}
+  tbody tr:hover{background:var(--teal-tint);}
+  td.num, th.num{font-family:var(--font-mono);}
+  .badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;}
+  .badge.ok{background:var(--teal-tint);color:var(--teal-dark);}
+  .badge.no{background:var(--rust-tint);color:var(--rust);}
+  .badge.neu{background:var(--gold-tint);color:var(--gold);}
+  .empty-row td{text-align:center;color:var(--muted);padding:26px;font-size:13px;}
+
+  /* Employee cards */
+  .emp-card{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px;display:flex;align-items:center;gap:14px;
+  }
+  .dial{
+    width:60px;height:60px;border-radius:50%;flex:none;
+    display:flex;align-items:center;justify-content:center;position:relative;
+  }
+  .dial .hole{
+    width:44px;height:44px;border-radius:50%;background:var(--surface);
+    display:flex;align-items:center;justify-content:center;flex-direction:column;
+  }
+  .dial .hole .b{font-family:var(--font-mono);font-size:9.5px;font-weight:700;color:var(--ink);}
+  .emp-info{flex:1;min-width:0;}
+  .emp-info .nm{font-weight:700;font-size:14.5px;}
+  .emp-info .cd{font-family:var(--font-mono);font-size:11.5px;color:var(--muted);margin-top:1px;}
+  .emp-info .dp{font-size:11.5px;color:var(--muted);margin-top:3px;}
+  .emp-actions{flex:none;}
+
+  .filter-bar{
+    display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px;margin-bottom:16px;
+  }
+  .filter-bar .field{margin-bottom:0;min-width:170px;}
+  .filter-bar .field.grow{flex:1;min-width:200px;}
+
+  .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px;}
+  .toolbar .actions{display:flex;gap:8px;}
+
+  #toast{
+    position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(10px);
+    background:var(--ink);color:#fff;padding:11px 20px;border-radius:8px;font-size:13.5px;
+    opacity:0;pointer-events:none;transition:opacity .25s, transform .25s;z-index:50;
+    box-shadow:0 8px 24px rgba(0,0,0,.2);
+  }
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  .section-title{font-family:var(--font-display);font-size:15.5px;font-weight:700;margin:26px 0 12px;display:flex;align-items:center;gap:8px;}
+  .section-title .eyebrow{
+    font-family:var(--font-mono);font-size:10.5px;color:var(--muted);
+    border:1px solid var(--line);border-radius:4px;padding:2px 7px;font-weight:600;
+  }
+  .type-legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+  .type-legend span{
+    font-size:10.8px;background:var(--surface-alt);border:1px solid var(--line);
+    border-radius:20px;padding:3px 10px;color:var(--ink-soft);font-weight:500;
+  }
+  .muted-link{background:none;border:none;color:var(--muted);text-decoration:underline;font-size:12px;padding:0;}
+  .muted-link:hover{color:var(--teal-dark);}
+
+  ::-webkit-scrollbar{height:9px;width:9px;}
+  ::-webkit-scrollbar-thumb{background:#C9CFD6;border-radius:10px;}
+
+  /* Shift badges on employee cards */
+  .shift-badge{
+    display:inline-flex;align-items:center;gap:5px;font-size:11px;
+    background:var(--surface-alt);border:1px solid var(--line);border-radius:20px;
+    padding:3px 9px;color:var(--ink-soft);font-family:var(--font-mono);font-weight:600;margin-top:6px;
+  }
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(22,27,34,.55);display:none;
+    align-items:center;justify-content:center;z-index:100;padding:20px;
+  }
+  .modal-overlay.show{display:flex;}
+  .modal-box{
+    background:var(--surface);border-radius:10px;padding:22px;width:100%;max-width:560px;
+    max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);
+  }
+  .modal-box h2{font-family:var(--font-display);font-size:16.5px;margin:0 0 16px;display:flex;justify-content:space-between;align-items:center;}
+  .modal-close{background:none;border:none;font-size:18px;color:var(--muted);line-height:1;cursor:pointer;}
+  .modal-close:hover{color:var(--rust);}
+  .modal-actions{display:flex;gap:10px;margin-top:6px;}
+
+  /* Variance detector */
+  .variance-row{
+    display:flex;align-items:center;gap:12px;padding:11px 14px;border:1px solid var(--line);
+    border-radius:7px;margin-bottom:8px;background:var(--surface);flex-wrap:wrap;
+  }
+  .variance-row .vinfo{flex:1;min-width:220px;}
+  .variance-row .vtype{font-weight:700;font-size:13px;}
+  .variance-row .vdetail{font-size:11.8px;color:var(--muted);margin-top:2px;}
+  .variance-row .vactions{display:flex;gap:6px;flex:none;}
+  .variance-row.tone-rust{border-inline-start:4px solid var(--rust);}
+  .variance-row.tone-gold{border-inline-start:4px solid var(--gold);}
+
+  /* Import module */
+  .dropzone{
+    border:2px dashed var(--line);border-radius:10px;padding:26px;text-align:center;
+    background:var(--surface-alt);cursor:pointer;transition:border-color .15s,background .15s;
+  }
+  .dropzone:hover, .dropzone.drag{border-color:var(--teal);background:var(--teal-tint);}
+  .dropzone .dz-title{font-weight:700;font-size:14px;}
+  .dropzone .dz-sub{font-size:11.8px;color:var(--muted);margin-top:4px;}
+  .status-pill{display:inline-block;padding:2px 10px;border-radius:20px;font-size:10.8px;font-weight:700;}
+  .status-pill.valid{background:var(--teal-tint);color:var(--teal-dark);}
+  .status-pill.dup{background:var(--gold-tint);color:var(--gold);}
+  .status-pill.err{background:var(--rust-tint);color:var(--rust);}
+  .status-pill.done{background:var(--ink);color:#fff;}
+  .import-summary{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0;}
+  .import-summary .chip{
+    font-family:var(--font-mono);font-size:12px;font-weight:600;padding:8px 14px;border-radius:8px;
+    background:var(--surface-alt);border:1px solid var(--line);
+  }
+
+  /* Day schedule table (per-employee weekly config) */
+  .sched-table{width:100%;border-collapse:collapse;font-size:12.8px;}
+  .sched-table th{text-align:right;font-size:11px;color:var(--muted);font-weight:700;padding:6px 8px;border-bottom:1px solid var(--line);}
+  .sched-table td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:middle;}
+  .sched-table input[type=time]{width:100%;padding:6px 7px;border:1px solid var(--line);border-radius:5px;background:var(--surface-alt);font-size:12.5px;}
+  .sched-table input[type=checkbox]{width:17px;height:17px;accent-color:var(--teal);}
+  .sched-table tr.off td{opacity:.45;}
+  .week-summary{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;}
+  .week-summary .dchip{
+    font-family:var(--font-mono);font-size:9.5px;text-align:center;min-width:34px;
+    border-radius:5px;padding:3px 4px;background:var(--surface-alt);border:1px solid var(--line);color:var(--muted);
+  }
+  .week-summary .dchip.on{background:var(--teal-tint);color:var(--teal-dark);border-color:var(--teal);}
+
+  .modal-box.wide{max-width:640px;}
+  .subtle-btn{background:none;border:none;color:var(--teal-dark);font-size:12px;font-weight:700;text-decoration:underline;padding:0;cursor:pointer;}
+
+  .date-range-toggle{display:none;}
+  .date-range-toggle.show{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+
+  .settings-inline{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);}
+  .settings-inline .field{margin-bottom:0;min-width:180px;}
+  .holiday-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
+  .holiday-chip{display:inline-flex;align-items:center;gap:8px;background:var(--surface-alt);border:1px solid var(--line);border-radius:20px;padding:5px 8px 5px 12px;font-size:12px;}
+  .holiday-chip .hc-date{font-family:var(--font-mono);font-weight:700;}
+  .holiday-chip .hc-remove{cursor:pointer;border:none;background:var(--rust-tint);color:var(--rust);width:18px;height:18px;border-radius:50%;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center;}
+  .holiday-list-empty{color:var(--muted);font-size:12.5px;margin-top:14px;}
+  .bulk-emp-picker{display:flex;flex-wrap:wrap;gap:8px;max-height:180px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:10px;}
+  .bulk-emp-picker label{display:flex;align-items:center;gap:6px;font-size:12.3px;background:var(--surface-alt);padding:5px 10px;border-radius:16px;cursor:pointer;}
+  /* Multi-employee bulk report page: unlike .pdf-page (hard-capped to one
+     A4 page for the single-employee report), this list can legitimately
+     span many employees, so it uses the original min-height + natural
+     flow so addPageAsImage's existing slicing logic splits it across
+     as many A4 pages as needed instead of clipping it. */
+  .pdf-page-flow{width:794px;min-height:1122px;padding:44px 46px;box-sizing:border-box;background:#fff;page-break-after:always;}
+  .logo-preview{width:38px;height:38px;border-radius:50%;object-fit:cover;border:1px solid var(--line);flex:none;}
+
+  /* Hidden offscreen template used to rasterize PDF pages (kept off-canvas, not display:none, so html2canvas can measure it) */
+  #pdf-render-root{
+    position:fixed;top:0;left:-99999px;width:794px;background:#fff;font-family:var(--font-body);direction:rtl;
+  }
+  /* Fixed height + hidden overflow (rather than min-height) strictly caps
+     each employee's aggregate report to one A4 page — content is kept
+     short by design (no daily transaction table) so it always fits.
+     Height is set a hair under the true A4 px equivalent (1122.5px) so the
+     rasterized page is never measured as taller than one page. Plain block
+     layout is kept (no flex) since html2canvas's flexbox support is
+     unreliable and was causing the export to fail silently. */
+  .pdf-page{width:794px;height:1118px;padding:44px 46px;box-sizing:border-box;background:#fff;page-break-after:always;overflow:hidden;}
+  .pdf-header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid var(--ink);padding-bottom:14px;margin-bottom:18px;}
+  .pdf-brand{display:flex;align-items:center;gap:12px;}
+  .pdf-logo{width:52px;height:52px;border-radius:50%;border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:800;color:var(--gold);font-size:18px;object-fit:cover;}
+  .pdf-org{font-family:var(--font-display);font-weight:800;font-size:17px;color:var(--ink);}
+  .pdf-org .sub{font-family:var(--font-body);font-weight:500;font-size:11.5px;color:var(--muted);margin-top:2px;}
+  .pdf-meta{text-align:left;font-size:11px;color:var(--muted);font-family:var(--font-mono);}
+  .pdf-title{font-family:var(--font-display);font-weight:800;font-size:20px;margin:14px 0 4px;}
+  .pdf-range{font-size:12px;color:var(--muted);font-family:var(--font-mono);margin-bottom:18px;}
+  .pdf-profile{display:flex;gap:24px;background:var(--surface-alt);border:1px solid var(--line);border-radius:8px;padding:14px 18px;margin-bottom:18px;}
+  .pdf-profile div{font-size:12px;}
+  .pdf-profile b{display:block;font-size:13.5px;margin-bottom:2px;}
+  .pdf-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;}
+  .pdf-metric{border:1px solid var(--line);border-radius:7px;padding:10px 12px;}
+  .pdf-metric .ml{font-size:10px;color:var(--muted);}
+  .pdf-metric .mv{font-family:var(--font-mono);font-size:16px;font-weight:700;margin-top:3px;}
+  .pdf-section-title{font-family:var(--font-display);font-weight:700;font-size:13.5px;margin:16px 0 8px;}
+  /* Clear label/value summary table — replaces the earlier boxed-metric grid,
+     which read as disconnected tiles rather than a coherent statement. Two
+     metrics per row keeps it compact enough for the single-page constraint
+     while reading like a normal statement line instead of a scattered tile. */
+  /* Rebuilt as flex rows/cells (matching the already-proven .pdf-header /
+     .pdf-profile technique elsewhere in this same document) instead of a
+     real <table>. html2canvas re-implements CSS painting itself rather
+     than using the browser's native layout engine, and its support for
+     table-layout:fixed + <colgroup> in an RTL document is unreliable —
+     that combination is what was letting the rightmost column's text
+     spill past the page's left edge. Flexbox is the layout mode already
+     confirmed to rasterize correctly in this file. */
+  .pdf-summary-block{border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:16px;}
+  .pdf-summary-row{display:flex;border-bottom:1px solid var(--line);}
+  .pdf-summary-row:last-child{border-bottom:none;}
+  .pdf-summary-row:nth-child(even){background:var(--surface-alt);}
+  .pdf-summary-cell{display:flex;justify-content:space-between;align-items:flex-start;flex:1 1 50%;min-width:0;padding:8px 12px;gap:8px;}
+  .pdf-summary-cell:first-child{border-left:1px solid var(--line);}
+  .pdf-summary-cell .lbl{color:var(--ink-soft);font-size:11.3px;min-width:0;}
+  .pdf-summary-cell .val{font-family:var(--font-mono);font-weight:700;color:var(--ink);font-size:11.8px;white-space:nowrap;flex:0 0 auto;}
+  .pdf-summary-cell .val.gold{color:var(--gold);}
+  .pdf-summary-row.total{border-top:2px solid var(--gold);}
+  .pdf-summary-row.total .lbl{font-weight:700;color:var(--ink);}
+  .pdf-summary-row.total .val{font-size:14px;}
+  .pdf-table{width:100%;border-collapse:collapse;font-size:10.3px;}
+  .pdf-table th{background:var(--ink);color:#fff;padding:6px 6px;text-align:right;font-family:var(--font-display);font-size:9.6px;}
+  .pdf-table td{padding:5px 6px;border-bottom:1px solid var(--line);}
+  .pdf-table tr:nth-child(even) td{background:var(--surface-alt);}
+  .pdf-footer{margin-top:16px;font-size:9.5px;color:var(--muted);text-align:center;}
+  /* Bulk commitment report rows — flexbox rows/cells (same technique as
+     .pdf-summary-block, confirmed to rasterize correctly) instead of a
+     real <table>. html2canvas's handling of actual <table> elements in
+     this RTL document has repeatedly proven unreliable in this file
+     (that's exactly why the per-employee summary was rebuilt this way),
+     so a new multi-column table is built the same safe way from the start
+     rather than risk the same silent failure. */
+  .pdf-bulk-table{border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-top:14px;}
+  .pdf-bulk-row{display:flex;}
+  .pdf-bulk-row.header{background:var(--ink);color:#fff;font-family:var(--font-display);font-weight:700;font-size:9.6px;}
+  .pdf-bulk-row:not(.header){border-bottom:1px solid var(--line);font-size:10px;}
+  .pdf-bulk-row:not(.header):nth-child(even){background:var(--surface-alt);}
+  .pdf-bulk-cell{box-sizing:border-box;padding:6px 5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .pdf-bulk-cell.c-code{flex:0 0 10%;}
+  .pdf-bulk-cell.c-name{flex:0 0 20%;}
+  .pdf-bulk-cell.c-target{flex:0 0 14%;font-family:var(--font-mono);}
+  .pdf-bulk-cell.c-deducted{flex:0 0 18%;font-family:var(--font-mono);}
+  .pdf-bulk-cell.c-pct{flex:0 0 12%;font-family:var(--font-mono);font-weight:700;}
+  .pdf-bulk-cell.c-absence{flex:0 0 13%;font-family:var(--font-mono);}
+  .pdf-bulk-cell.c-leave{flex:0 0 13%;font-family:var(--font-mono);}
+  /* ---- Aggregate commitment-rate report (single company-wide summary,
+     not one row per employee) — key/value info table plus a merged,
+     undivided closing block for the commitment percentage + tardiness
+     breakdown, matching the organization's standard weekly report layout. */
+  .pdf-info-table{border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:14px 0 18px;}
+  .pdf-info-row{display:flex;border-bottom:1px solid var(--line);}
+  .pdf-info-row:nth-child(odd){background:var(--surface-alt);}
+  .pdf-info-cell{box-sizing:border-box;padding:9px 14px;font-size:12px;}
+  .pdf-info-cell.lbl{flex:0 0 42%;font-weight:700;font-family:var(--font-display);border-left:1px solid var(--line);}
+  .pdf-info-cell.val{flex:1 1 58%;}
+  .pdf-commit-block{padding:14px 16px;text-align:center;}
+  .pdf-commit-formula{font-family:var(--font-mono);font-size:15px;font-weight:800;color:var(--ink);}
+  .pdf-commit-sub{font-family:var(--font-display);font-size:12.5px;font-weight:700;color:var(--ink-soft);margin-top:8px;line-height:2;}
+  .pdf-title-center{font-family:var(--font-display);font-weight:800;font-size:19px;text-align:center;margin:16px 0 2px;}
+  .pdf-subtitle-center{font-family:var(--font-display);font-weight:700;font-size:14.5px;text-align:center;color:var(--ink-soft);margin:0 0 16px;}
+  .pdf-list-table{border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-top:8px;}
+  .pdf-list-row{display:flex;}
+  .pdf-list-row.header{background:var(--ink);color:#fff;font-family:var(--font-display);font-weight:700;font-size:10px;}
+  .pdf-list-row:not(.header){border-bottom:1px solid var(--line);font-size:10.5px;}
+  .pdf-list-row:not(.header):nth-child(even){background:var(--surface-alt);}
+  .pdf-list-cell{box-sizing:border-box;padding:6px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .pdf-list-cell.c-t-name{flex:0 0 38%;}
+  .pdf-list-cell.c-t-minutes{flex:0 0 28%;font-family:var(--font-mono);}
+  .pdf-list-cell.c-t-date{flex:0 0 34%;font-family:var(--font-mono);}
+  .pdf-list-cell.c-l-name{flex:0 0 28%;}
+  .pdf-list-cell.c-l-type{flex:0 0 28%;}
+  .pdf-list-cell.c-l-note{flex:0 0 44%;white-space:normal;font-family:var(--font-mono);}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-mark">سجل</div>
+      <div class="brand-text">
+        <div class="t1">سِجِلّ</div>
+        <div class="t2">إدارة الحضور والانصراف</div>
+      </div>
+      <button class="sidebar-close" id="sidebar-close" aria-label="إغلاق القائمة">✕</button>
+    </div>
+    <nav class="navlist">
+      <button class="navitem active" data-view="overview"><span class="ic">◆</span> نظرة عامة</button>
+      <button class="navitem" data-view="transactions"><span class="ic">✎</span> تسجيل الحركات</button>
+      <button class="navitem" data-view="employees"><span class="ic">☰</span> الموظفون</button>
+      <button class="navitem" data-view="reports"><span class="ic">▤</span> التقارير والتصدير</button>
+      <button class="navitem" data-view="import"><span class="ic">⇩</span> استيراد من Excel</button>
+      <button class="navitem" data-view="settings"><span class="ic">⚙</span> الإعدادات</button>
+    </nav>
+    <div class="sidebar-foot">تخزين محلي بالكامل (LocalStorage)<br>لا يتطلب اتصالاً بخادم</div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="menu-toggle" id="menu-toggle" aria-label="فتح القائمة">☰</button>
+        <div>
+          <h1 id="page-title">نظرة عامة</h1>
+          <div class="sub" id="page-sub">ملخص سريع لحالة الحضور والسلف والإجازات</div>
+        </div>
+      </div>
+      <div class="today-chip" id="today-chip">—</div>
+    </header>
+
+    <!-- OVERVIEW -->
+    <section class="view active" id="view-overview">
+      <div class="grid cols-4" id="stats-grid"></div>
+
+      <div class="section-title">أحدث الحركات المسجّلة <span class="eyebrow" id="overview-recent-eyebrow">آخر 8</span></div>
+      <div class="filter-bar">
+        <div class="field">
+          <label>الموظف</label>
+          <select id="overview-employee-filter"><option value="">جميع الموظفين</option></select>
+        </div>
+        <div class="field grow">
+          <label>بحث في الحركات</label>
+          <input type="text" id="overview-records-search" placeholder="ابحث باسم الموظف أو نوع الحركة (مثال: دفعة)..." autocomplete="off">
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>الموظف</th><th>التاريخ</th><th>النوع</th><th>التصنيف</th><th class="num">القيمة</th><th>ملاحظات</th>
+          </tr></thead>
+          <tbody id="overview-recent"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TRANSACTIONS -->
+    <section class="view" id="view-transactions">
+      <div class="grid cols-2" style="align-items:start;">
+        <div class="card">
+          <h2>تسجيل حركة جديدة</h2>
+          <form id="tx-form">
+            <div class="field">
+              <label>الموظف</label>
+              <input type="text" id="tx-employee-search" placeholder="ابحث بالاسم أو الكود للتصفية..." autocomplete="off" style="margin-bottom:6px;">
+              <select id="tx-employee" required></select>
+              <div class="hint" id="tx-emp-hint"></div>
+            </div>
+            <div class="form-row" id="tx-date-wrap">
+              <div class="field">
+                <label>تاريخ الحركة</label>
+                <input type="date" id="tx-date" required>
+              </div>
+              <div class="field">
+                <label>نوع الحركة الرئيسي</label>
+                <select id="tx-type" required></select>
+              </div>
+            </div>
+            <div class="date-range-toggle" id="tx-range-wrap">
+              <div class="field">
+                <label>من تاريخ</label>
+                <input type="date" id="tx-leave-from">
+              </div>
+              <div class="field">
+                <label>إلى تاريخ</label>
+                <input type="date" id="tx-leave-to">
+              </div>
+            </div>
+            <div class="hint" id="tx-range-hint" style="display:none;margin:-8px 0 12px;">سيتم إنشاء سجل إجازة منفصل تلقائياً لكل يوم عمل ضمن هذا النطاق (تُستثنى أيام الراحة الأسبوعية للموظف).</div>
+            <div class="form-row">
+              <div class="field">
+                <label id="tx-sub-label">التصنيف الفرعي</label>
+                <select id="tx-sub" required></select>
+              </div>
+              <div class="field" id="tx-value-wrap">
+                <label id="tx-value-label">القيمة</label>
+                <input id="tx-value" required>
+              </div>
+            </div>
+            <div class="field">
+              <label>البيان / ملاحظات <span class="hint">(اختياري)</span></label>
+              <textarea id="tx-notes" placeholder="أي تفاصيل إضافية تخص هذه الحركة..."></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">حفظ الحركة</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2>دليل أنواع الحركات</h2>
+          <p style="font-size:12.8px;color:var(--muted);line-height:1.9;margin:0 0 8px;">
+            يدعم النظام تسجيل حركات الحضور والانصراف، والسلف مع احتساب الرصيد المتبقي تلقائياً،
+            وتبريرات الغياب والتأخير والخروج المبكر، وأذونات الخروج المؤقت، وأنواع الإجازات الأربعة،
+            والعمل الإضافي، والمستحقات المالية من الراتب.
+          </p>
+          <div class="type-legend" id="type-legend"></div>
+        </div>
+      </div>
+
+      <div class="section-title">كشف الفوارق الزمني التلقائي <span class="eyebrow">وفق جدول كل موظف</span></div>
+      <div class="filter-bar">
+        <div class="field grow">
+          <label>الموظف</label>
+          <select id="var-employee"></select>
+        </div>
+        <div class="field">
+          <label>من تاريخ</label>
+          <input type="date" id="var-from">
+        </div>
+        <div class="field">
+          <label>إلى تاريخ</label>
+          <input type="date" id="var-to">
+        </div>
+        <button class="btn btn-primary" id="var-scan">فحص الفوارق</button>
+      </div>
+      <div id="var-results"></div>
+
+      <div class="section-title">سجل الحركات <span class="eyebrow" id="tx-count-badge">0</span></div>
+      <div class="filter-bar">
+        <div class="field grow">
+          <label>بحث في السجلات</label>
+          <input type="text" id="tx-records-search" placeholder="ابحث باسم الموظف أو نوع الحركة (مثال: دفعة)..." autocomplete="off">
+        </div>
+        <button type="button" class="btn btn-ghost" id="btn-clear-duplicates" style="align-self:flex-end;">مسح التكرارات الموجودة مسبقاً</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>الموظف</th><th>التاريخ</th><th>النوع</th><th>التصنيف</th><th class="num">القيمة</th><th>ملاحظات</th><th></th><th></th>
+          </tr></thead>
+          <tbody id="tx-table-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- EMPLOYEES -->
+    <section class="view" id="view-employees">
+      <div class="grid cols-2" style="align-items:start;margin-bottom:22px;">
+        <div class="card">
+          <h2>إضافة موظف جديد</h2>
+          <form id="emp-form">
+            <div class="form-row">
+              <div class="field">
+                <label>الرقم الوظيفي</label>
+                <input id="emp-code" placeholder="مثال: EMP-014" required>
+              </div>
+              <div class="field">
+                <label>اسم الموظف</label>
+                <input id="emp-name" placeholder="الاسم الكامل" required>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="field">
+                <label>القسم <span class="hint">(اختياري)</span></label>
+                <input id="emp-dept" placeholder="مثال: المالية">
+              </div>
+              <div class="field">
+                <label>تاريخ التعيين <span class="hint">(اختياري)</span></label>
+                <input type="date" id="emp-hire">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="field">
+                <label>تاريخ الميلاد <span class="hint">(لاحتساب رصيد الإجازات السنوية تلقائياً حسب العمر)</span></label>
+                <input type="date" id="emp-birthdate">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="field">
+                <label>رصيد الإجازات السنوية المستحقة <span class="hint">(يوم/سنة — يُحسب تلقائياً عند إدخال تاريخ الميلاد: 30 يوماً لمن هم دون الخمسين، 45 يوماً لمن بلغوا الخمسين فأكثر. يُستخدم هذا الحقل يدوياً فقط إن تُرك تاريخ الميلاد فارغاً)</span></label>
+                <input type="number" id="emp-leave-entitlement" min="0" step="0.5" placeholder="مثال: 30">
+              </div>
+            </div>
+            <div class="section-title" style="margin:16px 0 6px;font-size:13.5px;">جدول الدوام الرسمي</div>
+            <p class="hint" style="margin:0 0 4px;">سيُطبَّق تلقائياً إعداد الشركة الافتراضي (سبت–أربعاء 7 ساعات، خميس 5.5 ساعة، جمعة راحة)، ويمكن تخصيصه لاحقاً من بطاقة الموظف.</p>
+            <button type="submit" class="btn btn-primary btn-block" style="margin-top:10px;">إضافة الموظف</button>
+          </form>
+        </div>
+        <div class="card">
+          <h2>حالة السلف والدوام — دليل القراءة</h2>
+          <p style="font-size:12.8px;color:var(--muted);line-height:1.9;">
+            الحلقة الذهبية حول كل موظف تمثل نسبة ما تم سداده من إجمالي السلف الصادرة له،
+            والرقم في المنتصف هو الرصيد المتبقي المستحق عليه حالياً بالدينار الليبي. أما جدول الدوام
+            المخصص لكل موظف فيُستخدم تلقائياً في «كشف الفوارق الزمني» ضمن صفحة تسجيل الحركات لاحتساب
+            التأخير والخروج المبكر والعمل الإضافي وفق ساعاته الرسمية الخاصة، وليس جدولاً موحداً للجميع.
+          </p>
+        </div>
+      </div>
+      <div class="toolbar">
+        <div class="section-title" style="margin:0;">قائمة الموظفين <span class="eyebrow" id="emp-count-badge">0</span></div>
+      </div>
+      <div class="grid cols-2" id="emp-list"></div>
+    </section>
+
+    <!-- REPORTS -->
+    <section class="view" id="view-reports">
+      <div class="filter-bar">
+        <div class="field grow">
+          <label>الموظف</label>
+          <select id="rep-employee"><option value="all">جميع الموظفين (تقرير جماعي)</option></select>
+        </div>
+        <div class="field">
+          <label>من تاريخ</label>
+          <input type="date" id="rep-from">
+        </div>
+        <div class="field">
+          <label>إلى تاريخ</label>
+          <input type="date" id="rep-to">
+        </div>
+        <button class="btn btn-primary" id="rep-generate">استخراج التقرير</button>
+      </div>
+
+      <div class="toolbar">
+        <div class="section-title" style="margin:0;">نتائج التقرير <span class="eyebrow" id="rep-count-badge">0 حركة</span></div>
+        <div class="actions">
+          <button class="btn btn-ghost btn-sm" id="rep-export-csv" disabled>تصدير CSV</button>
+          <button class="btn btn-ghost btn-sm" id="rep-export-xlsx" disabled>تصدير Excel (XLSX)</button>
+          <button class="btn btn-primary btn-sm" id="rep-export-pdf" disabled>تصدير PDF</button>
+        </div>
+      </div>
+
+      <div class="field" style="margin:4px 0 14px;">
+        <label>الموظفون المشمولون بتقرير PDF الشامل <span class="hint">(اختياري — الافتراضي جميع الموظفين)</span></label>
+        <label style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;margin:4px 0 8px;cursor:pointer;">
+          <input type="checkbox" id="rep-pdf-emp-select-all" checked> تحديد الكل
+        </label>
+        <div id="rep-pdf-emp-picker" class="bulk-emp-picker"></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>كود الموظف</th>
+            <th>اسم الموظف</th>
+            <th>تاريخ الحركة</th>
+            <th>يوم الأسبوع</th>
+            <th class="num">وقت الدخول</th>
+            <th class="num">وقت الخروج</th>
+            <th class="num">الساعات المستهدفة</th>
+            <th class="num">صافي ساعات العمل</th>
+            <th>نوع الحركة</th>
+            <th>التصنيف الفرعي</th>
+            <th class="num">مدة التأخير</th>
+            <th class="num">مدة الخروج المبكر</th>
+            <th class="num">مدة الإضافي</th>
+            <th>حركة السلف</th>
+            <th class="num">رصيد السلف المتبقي</th>
+            <th>البيان / الملاحظات</th>
+          </tr></thead>
+          <tbody id="rep-table-body"><tr class="empty-row"><td colspan="16">اضبط النطاق الزمني ثم اضغط «استخراج التقرير»</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="card" style="margin-top:18px;">
+        <h2>حساب نسبة التزام الموظفين بالدوام الرسمي</h2>
+        <p class="hint" style="margin:-4px 0 12px;">يحسب إجمالي ساعات الدوام الرسمي المستهدفة وإجمالي ساعات الحضور الفعلية لكل الموظفين المختارين خلال الفترة المحددة، ثم يستخرج نسبة الالتزام العامة وتفصيل التأخيرات، إلى جانب سجل تأخيرات كل موظف وسجل الإجازات والغياب خلال نفس الفترة.</p>
+        <div class="settings-inline" style="margin-top:0;padding-top:0;border-top:none;">
+          <div class="field">
+            <label>من تاريخ</label>
+            <input type="date" id="bulk-from">
+          </div>
+          <div class="field">
+            <label>إلى تاريخ</label>
+            <input type="date" id="bulk-to">
+          </div>
+          <button class="btn btn-primary btn-sm" id="bulk-generate-btn" type="button">إنشاء التقرير</button>
+          <button class="btn btn-ghost btn-sm" id="bulk-export-pdf-btn" type="button" disabled>تصدير PDF</button>
+        </div>
+        <div class="field" style="margin-top:12px;">
+          <label>الموظفون المشمولون بالتقرير</label>
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;margin:4px 0 8px;cursor:pointer;">
+            <input type="checkbox" id="bulk-emp-select-all"> تحديد الكل
+          </label>
+          <div id="bulk-emp-picker" class="bulk-emp-picker"></div>
+        </div>
+        <div id="bulk-summary" style="margin-top:16px;"></div>
+        <div class="section-title" id="bulk-tardiness-title" style="margin:18px 0 6px;font-size:13.5px;display:none;">التأخيرات</div>
+        <div class="table-wrap" id="bulk-tardiness-wrap" style="display:none;">
+          <table>
+            <thead><tr><th>الاسم</th><th class="num">إجمالي التأخير</th><th>التاريخ</th></tr></thead>
+            <tbody id="bulk-tardiness-tbody"></tbody>
+          </table>
+        </div>
+        <div class="section-title" id="bulk-leave-title" style="margin:18px 0 6px;font-size:13.5px;display:none;">الإجازات والغياب</div>
+        <div class="table-wrap" id="bulk-leave-wrap" style="display:none;">
+          <table>
+            <thead><tr><th>الاسم</th><th>نوع الإجازة</th><th>ملاحظة</th></tr></thead>
+            <tbody id="bulk-leave-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <div id="pdf-render-root"></div>
+
+    <!-- IMPORT -->
+    <section class="view" id="view-import">
+      <div class="grid cols-2" style="align-items:start;">
+        <div class="card">
+          <h2>استيراد سجلات حضور وانصراف جماعي</h2>
+          <p style="font-size:12.8px;color:var(--muted);line-height:1.9;margin:0 0 14px;">
+            يقوم النظام بمطابقة كل صف مع الموظف المسجّل في النظام عبر «كود الموظف»، ويتجاهل تلقائياً أي حركة
+            مستوردة مطابقة تماماً لحركة موجودة مسبقاً لمنع التكرار. الأعمدة المتوقعة: <b>كود الموظف</b>،
+            <b>التاريخ</b>، <b>وقت الحضور</b> (اختياري)، <b>وقت الانصراف</b> (اختياري)، <b>ملاحظات</b> (اختياري).
+          </p>
+          <div class="dropzone" id="dropzone">
+            <div class="dz-title">اضغط لاختيار ملف Excel أو اسحبه هنا</div>
+            <div class="dz-sub">صيغ مدعومة: XLSX, XLS, CSV</div>
+            <input type="file" id="import-file" accept=".xlsx,.xls,.csv" style="display:none;">
+          </div>
+          <div style="display:flex;gap:10px;margin-top:14px;">
+            <button class="btn btn-ghost btn-sm" id="btn-download-template">تنزيل قالب الاستيراد</button>
+            <button class="btn btn-ghost btn-sm" id="btn-clear-import" style="display:none;">مسح المعاينة</button>
+          </div>
+        </div>
+        <div class="card">
+          <h2>قواعد التحقق من صحة البيانات</h2>
+          <p style="font-size:12.8px;color:var(--muted);line-height:1.9;">
+            يُرفض الصف تلقائياً إذا كان كود الموظف مفقوداً أو غير موجود في النظام، أو كان التاريخ غير صالح،
+            أو لم يتضمن الصف أي وقت حضور أو انصراف. تظهر أسباب الرفض بجانب كل صف لتصحيحه وإعادة المحاولة.
+          </p>
+        </div>
+      </div>
+
+      <div id="import-summary-wrap" style="display:none;">
+        <div class="section-title">ملخّص المعاينة</div>
+        <div class="import-summary" id="import-summary"></div>
+      </div>
+
+      <div id="import-preview-wrap" style="display:none;">
+        <div class="toolbar">
+          <div class="section-title" style="margin:0;">معاينة الصفوف <span class="eyebrow" id="import-count-badge">0</span></div>
+          <div class="actions">
+            <button class="btn btn-primary btn-sm" id="btn-confirm-import" disabled>تأكيد الاستيراد</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>#</th><th>كود الموظف</th><th>التاريخ</th><th>حضور</th><th>انصراف</th><th>ملاحظات</th><th>الحالة</th><th>السبب</th>
+            </tr></thead>
+            <tbody id="import-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="view" id="view-settings">
+      <div class="card">
+        <h2>إعدادات هوية تقرير PDF</h2>
+        <div class="settings-inline">
+          <div class="field">
+            <label>اسم المؤسسة</label>
+            <input id="org-name-input" placeholder="اسم المؤسسة">
+          </div>
+          <div class="field">
+            <label>الشعار <span class="hint">(اختياري)</span></label>
+            <input type="file" id="org-logo-input" accept="image/*">
+          </div>
+          <img id="org-logo-preview" class="logo-preview" style="display:none;">
+          <button class="btn btn-ghost btn-sm" id="org-logo-clear" style="display:none;">إزالة الشعار</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:18px;">
+        <h2>فترة السماح بالتأخير والخروج المبكر</h2>
+        <p class="hint" style="margin:-4px 0 12px;">أي تأخير أو خروج مبكر يقع ضمن فترة السماح (بالدقائق) لا يُحتسب في «كشف الفوارق الزمني». أما ما يتجاوزها فيُحتسب كاملاً كما كان سابقاً.</p>
+        <div class="settings-inline" style="margin-top:0;padding-top:0;border-top:none;">
+          <div class="field">
+            <label>فترة السماح بالتأخير (دقيقة)</label>
+            <input type="number" id="grace-tardiness-input" min="0" step="1" placeholder="مثال: 10">
+          </div>
+          <div class="field">
+            <label>فترة السماح بالخروج المبكر (دقيقة)</label>
+            <input type="number" id="grace-early-input" min="0" step="1" placeholder="مثال: 10">
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:18px;">
+        <h2>العطل الرسمية وإعدادات الإجازات السنوية</h2>
+        <label class="checkbox-row" style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+          <input type="checkbox" id="exclude-holidays-toggle">
+          <span>استثناء أيام العطل الرسمية من احتساب الإجازات السنوية عند تسجيل إجازة بنطاق تاريخ</span>
+        </label>
+        <label class="checkbox-row" style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+          <input type="checkbox" id="exclude-friday-toggle">
+          <span>استثناء يوم الجمعة من احتساب الإجازات السنوية عند تسجيل إجازة بنطاق تاريخ</span>
+        </label>
+        <div class="settings-inline" style="margin-top:0;padding-top:0;border-top:none;">
+          <div class="field">
+            <label>تاريخ العطلة الرسمية</label>
+            <input type="date" id="holiday-date-input">
+          </div>
+          <div class="field">
+            <label>وصف العطلة <span class="hint">(اختياري)</span></label>
+            <input id="holiday-label-input" placeholder="مثال: عيد الاستقلال">
+          </div>
+          <button class="btn btn-primary btn-sm" id="holiday-add-btn" type="button">إضافة عطلة</button>
+        </div>
+        <div id="holiday-list" class="holiday-list"></div>
+      </div>
+
+      <div class="card" style="margin-top:18px;">
+        <h2>قواعد الحركات المتكررة</h2>
+        <p class="hint" style="margin:-4px 0 12px;">نوعان من القواعد: «حد أدنى فاصل بالأشهر» (مثال: لا يجوز صرف تسوية راتب كاملة لنفس الموظف إلا بعد مرور 6 أشهر من آخر مرة)، أو «حد أقصى للعدد في الشهر» (مثال: 3 أذونات خروج فقط في الشهر الواحد). عند مخالفة أي منهما يظهر تنبيه قابل للتجاوز عند تسجيل الحركة.</p>
+        <div class="settings-inline" style="margin-top:0;padding-top:0;border-top:none;">
+          <div class="field">
+            <label>نوع الحركة</label>
+            <select id="rule-type"></select>
+          </div>
+          <div class="field">
+            <label>التصنيف الفرعي</label>
+            <select id="rule-sub"></select>
+          </div>
+          <div class="field">
+            <label>نوع القاعدة</label>
+            <select id="rule-kind">
+              <option value="interval">حد أدنى فاصل بين الحركات (أشهر)</option>
+              <option value="monthlyLimit">حد أقصى للعدد في الشهر</option>
+            </select>
+          </div>
+          <div class="field" id="rule-min-months-field">
+            <label>الحد الأدنى (أشهر)</label>
+            <input type="number" id="rule-min-months" min="1" step="1" placeholder="مثال: 6">
+          </div>
+          <div class="field" id="rule-max-per-month-field" style="display:none;">
+            <label>الحد الأقصى (مرات/شهر)</label>
+            <input type="number" id="rule-max-per-month" min="1" step="1" placeholder="مثال: 3">
+          </div>
+          <button class="btn btn-primary btn-sm" id="rule-add-btn" type="button">إضافة قاعدة</button>
+        </div>
+        <div id="rule-list" class="holiday-list"></div>
+      </div>
+
+      <div class="card" style="margin-top:18px;">
+        <h2>تعديل مؤقت لوقت الدوام الرسمي</h2>
+        <p class="hint" style="margin:-4px 0 12px;">حدد نطاق تاريخ ووقت بداية/نهاية دوام جديد، ليُطبَّق تلقائياً على الموظفين المحددين خلال هذا النطاق فقط (في «كشف الفوارق الزمني» والتقارير). بعد تاريخ الانتهاء يعود جدولهم تلقائياً إلى إعداده الأساسي دون أي تدخل يدوي.</p>
+        <div class="settings-inline" style="margin-top:0;padding-top:0;border-top:none;">
+          <div class="field">
+            <label>من تاريخ</label>
+            <input type="date" id="sched-ovr-from">
+          </div>
+          <div class="field">
+            <label>إلى تاريخ</label>
+            <input type="date" id="sched-ovr-to">
+          </div>
+          <div class="field">
+            <label>وقت بداية الدوام الجديد</label>
+            <input type="time" id="sched-ovr-start">
+          </div>
+          <div class="field">
+            <label>وقت نهاية الدوام الجديد</label>
+            <input type="time" id="sched-ovr-end">
+          </div>
+        </div>
+        <div class="field" style="margin-top:6px;">
+          <label>الموظفون المشمولون بالتعديل</label>
+          <label class="checkbox-row" style="display:flex;align-items:center;gap:8px;margin:8px 0;">
+            <input type="checkbox" id="sched-ovr-all-emps">
+            <span>تطبيق على جميع الموظفين</span>
+          </label>
+          <div id="sched-ovr-emp-list" style="max-height:180px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px 12px;"></div>
+        </div>
+        <button class="btn btn-primary btn-sm" id="sched-ovr-add-btn" type="button" style="margin-top:10px;">تطبيق التعديل المؤقت</button>
+        <div class="section-title" style="margin:18px 0 6px;font-size:13.5px;">التعديلات المؤقتة المسجّلة</div>
+        <div id="sched-ovr-list" class="holiday-list"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+<div id="toast"></div>
+
+<!-- Edit Employee Modal -->
+<div class="modal-overlay" id="edit-emp-overlay">
+  <div class="modal-box">
+    <h2>تعديل بيانات الموظف <button class="modal-close" id="edit-emp-close">✕</button></h2>
+    <form id="edit-emp-form">
+      <input type="hidden" id="edit-emp-id">
+      <div class="form-row">
+        <div class="field">
+          <label>الرقم الوظيفي</label>
+          <input id="edit-emp-code" required>
+        </div>
+        <div class="field">
+          <label>اسم الموظف</label>
+          <input id="edit-emp-name" required>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label>القسم <span class="hint">(اختياري)</span></label>
+          <input id="edit-emp-dept">
+        </div>
+        <div class="field">
+          <label>تاريخ التعيين <span class="hint">(اختياري)</span></label>
+          <input type="date" id="edit-emp-hire">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label>تاريخ الميلاد <span class="hint">(لاحتساب رصيد الإجازات السنوية تلقائياً حسب العمر)</span></label>
+          <input type="date" id="edit-emp-birthdate">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label>رصيد الإجازات السنوية المستحقة <span class="hint">(يوم/سنة — يُحسب تلقائياً عند إدخال تاريخ الميلاد: 30 يوماً لمن هم دون الخمسين، 45 يوماً لمن بلغوا الخمسين فأكثر. يُستخدم هذا الحقل يدوياً فقط إن تُرك تاريخ الميلاد فارغاً)</span></label>
+          <input type="number" id="edit-emp-leave-entitlement" min="0" step="0.5" placeholder="مثال: 30">
+        </div>
+      </div>
+      <div class="hint" style="margin:2px 0 4px;">لتعديل جدول الدوام اليومي المفصّل، استخدم زر «جدول الدوام» في بطاقة الموظف.</div>
+      <div class="modal-actions">
+        <button type="submit" class="btn btn-primary" style="flex:1;">حفظ التعديلات</button>
+        <button type="button" class="btn btn-ghost" id="edit-emp-cancel">إلغاء</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Daily Shift Schedule Modal -->
+<div class="modal-overlay" id="schedule-modal-overlay">
+  <div class="modal-box wide">
+    <h2>جدول الدوام اليومي — <span id="sched-emp-name" style="color:var(--teal-dark);"></span> <button class="modal-close" id="schedule-modal-close">✕</button></h2>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 12px;">
+      حدّد وقت بداية ونهاية الدوام الرسمي لكل يوم على حدة. الأيام غير المفعّلة تُحتسب كأيام راحة أسبوعية
+      ولا تُستخدم في احتساب التأخير أو الإضافي أو الخروج المبكر.
+    </p>
+    <button type="button" class="subtle-btn" id="sched-apply-default">تطبيق إعداد الشركة الافتراضي (سبت–أربعاء 7 ساعات، خميس 5.5 ساعة، جمعة راحة)</button>
+    <table class="sched-table" style="margin-top:12px;">
+      <thead><tr><th style="width:28px;"></th><th>اليوم</th><th>بداية الدوام</th><th>نهاية الدوام</th><th>الساعات المستهدفة</th></tr></thead>
+      <tbody id="sched-table-body"></tbody>
+    </table>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-primary" id="sched-save" style="flex:1;">حفظ جدول الدوام</button>
+      <button type="button" class="btn btn-ghost" id="sched-cancel">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Transaction Modal -->
+<div class="modal-overlay" id="edit-tx-overlay">
+  <div class="modal-box">
+    <h2>تعديل الحركة <button class="modal-close" id="edit-tx-close">✕</button></h2>
+    <form id="edit-tx-form">
+      <input type="hidden" id="edit-tx-id">
+      <div class="field">
+        <label>الموظف</label>
+        <select id="edit-tx-employee" required></select>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label>تاريخ الحركة</label>
+          <input type="date" id="edit-tx-date" required>
+        </div>
+        <div class="field">
+          <label>نوع الحركة الرئيسي</label>
+          <select id="edit-tx-type" required></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label>التصنيف الفرعي</label>
+          <select id="edit-tx-sub" required></select>
+        </div>
+        <div class="field">
+          <label id="edit-tx-value-label">القيمة</label>
+          <input id="edit-tx-value" required>
+        </div>
+      </div>
+      <div class="field">
+        <label>البيان / ملاحظات <span class="hint">(اختياري)</span></label>
+        <textarea id="edit-tx-notes"></textarea>
+      </div>
+      <div class="hint" style="margin-bottom:10px;">سيُعاد احتساب الأرصدة التراكمية وساعات العمل فور الحفظ.</div>
+      <div class="modal-actions">
+        <button type="submit" class="btn btn-primary" style="flex:1;">حفظ التعديل</button>
+        <button type="button" class="btn btn-ghost" id="edit-tx-cancel">إلغاء</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+/* ======================= DATA LAYER ======================= */
+const LS_EMP = 'sijil_employees_v1';
+const LS_TX  = 'sijil_transactions_v1';
+
+// Small storage abstraction: same JSON.parse/try-catch/fallback and
+// JSON.stringify pattern used everywhere below, unified in one place.
+const storage = {
+  getJSON(key, fallback){ try{ return JSON.parse(localStorage.getItem(key)) || fallback; }catch(e){ return fallback; } },
+  setJSON(key, value){ localStorage.setItem(key, JSON.stringify(value)); }
+};
+
+function loadEmployees(){ return storage.getJSON(LS_EMP, []); }
+function saveEmployees(){ storage.setJSON(LS_EMP, employees); }
+function loadTx(){ return storage.getJSON(LS_TX, []); }
+function saveTx(){ storage.setJSON(LS_TX, transactions); }
+
+let employees = loadEmployees();
+let transactions = loadTx();
+
+function uid(prefix){ return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+function pad2(n){ return String(n).padStart(2,'0'); }
+// Minutes between two "HH:MM" strings (t2 - t1). Positive means t2 is later than t1.
+function timeDiffMinutes(t1, t2){
+  const [h1,m1] = t1.split(':').map(Number);
+  const [h2,m2] = t2.split(':').map(Number);
+  return (h2*60+m2) - (h1*60+m1);
+}
+
+/* ======================= DYNAMIC DAILY SHIFT CONFIG ======================= */
+// Keyed by JS Date.getDay(): 0=Sun,1=Mon,2=Tue,3=Wed,4=Thu,5=Fri,6=Sat.
+// Company default policy: Sat–Wed = 7h workday, Thursday = 5.5h, Friday = off.
+const COMPANY_DEFAULT_SCHEDULE = {
+  6:{enabled:true, start:'09:00', end:'16:00'}, // Sat  (7h)
+  0:{enabled:true, start:'09:00', end:'16:00'}, // Sun  (7h)
+  1:{enabled:true, start:'09:00', end:'16:00'}, // Mon  (7h)
+  2:{enabled:true, start:'09:00', end:'16:00'}, // Tue  (7h)
+  3:{enabled:true, start:'09:00', end:'16:00'}, // Wed  (7h)
+  4:{enabled:true, start:'09:00', end:'14:30'}, // Thu  (5.5h)
+  5:{enabled:false, start:'', end:''},          // Fri  (off)
+};
+function defaultDailySchedule(){
+  const out = {};
+  for(let d=0; d<7; d++) out[d] = Object.assign({}, COMPANY_DEFAULT_SCHEDULE[d]);
+  return out;
+}
+// Builds a per-day schedule for employees created before this feature existed,
+// respecting any legacy uniform shiftStart/shiftEnd/workDays where present,
+// while still applying the company's Thursday/Friday rule.
+function buildDailyScheduleFromLegacy(e){
+  const out = {};
+  const legacyEnabled = Array.isArray(e.workDays) ? e.workDays : null;
+  const legacyStart = e.shiftStart || '09:00';
+  const legacyEnd = e.shiftEnd || '16:00';
+  for(let d=0; d<7; d++){
+    if(d===5){ out[d] = { enabled:false, start:'', end:'' }; continue; }
+    const enabled = legacyEnabled ? legacyEnabled.includes(d) : COMPANY_DEFAULT_SCHEDULE[d].enabled;
+    if(d===4){ // Thursday: keep same start time but cap at 5.5h target
+      const startMin = legacyStart.split(':').map(Number);
+      const endTotal = startMin[0]*60 + startMin[1] + 330;
+      out[d] = { enabled, start: legacyStart, end: `${pad2(Math.floor(endTotal/60)%24)}:${pad2(endTotal%60)}` };
+    } else {
+      out[d] = { enabled, start: legacyStart, end: legacyEnd };
+    }
+  }
+  return out;
+}
+function getDayShift(emp, dayIndex, dateStr){
+  const base = (emp.dailySchedule && emp.dailySchedule[dayIndex]) || COMPANY_DEFAULT_SCHEDULE[dayIndex];
+  if(dateStr && base && base.enabled){
+    const ovr = getActiveScheduleOverride(emp.id, dateStr);
+    if(ovr) return { enabled:true, start: ovr.start, end: ovr.end };
+  }
+  return base;
+}
+function getDayTargetHours(emp, dayIndex, dateStr){
+  const s = getDayShift(emp, dayIndex, dateStr);
+  if(!s || !s.enabled || !s.start || !s.end) return 0;
+  return Math.max(0, timeDiffMinutes(s.start, s.end) / 60);
+}
+function dowOf(dateStr){ return new Date(dateStr+'T00:00:00').getDay(); }
+
+/* ======================= TYPE CONFIG ======================= */
+const TYPE_CONFIG = {
+  attendance: { label:'حضور / انصراف', icon:'حض',
+    subs:[{v:'in',l:'حضور'},{v:'out',l:'انصراف'}],
+    valueLabel:'الوقت', valueType:'time', unit:'' },
+  loan: { label:'سلفة / عهدة', icon:'سلف',
+    subs:[{v:'issue',l:'صرف سلفة'},{v:'repay',l:'سداد قسط'}],
+    valueLabel:'المبلغ (د.ل)', valueType:'number', step:'0.01', unit:' د.ل' },
+  payroll: { label:'مستحقات مالية', icon:'راتب',
+    subs:[{v:'advance',l:'دفعة مقدمة من الراتب'},{v:'settlement',l:'تسوية / تسليم الراتب كاملاً'}],
+    valueLabel:'المبلغ (د.ل)', valueType:'number', step:'0.01', unit:' د.ل' },
+  absence: { label:'غياب', icon:'غياب',
+    subs:[{v:'approved',l:'معتمد بإذن'},{v:'unapproved',l:'غير معتمد بدون إذن'}],
+    valueLabel:'عدد الأيام', valueType:'number', step:'0.5', unit:' يوم', default:'1' },
+  tardiness: { label:'تأخير', icon:'تأخ',
+    subs:[{v:'approved',l:'معتمد بإذن'},{v:'unapproved',l:'غير معتمد بدون إذن'}],
+    valueLabel:'عدد الساعات', valueType:'number', step:'0.25', unit:' ساعة' },
+  early_departure: { label:'خروج مبكر', icon:'خرج',
+    subs:[{v:'approved',l:'معتمد بإذن'},{v:'unapproved',l:'غير معتمد بدون إذن'}],
+    valueLabel:'عدد الساعات', valueType:'number', step:'0.25', unit:' ساعة' },
+  short_leave: { label:'إذن خروج مؤقت', icon:'إذن',
+    subs:[{v:'approved',l:'معتمدة'},{v:'unapproved',l:'غير معتمدة'}],
+    valueLabel:'عدد الساعات', valueType:'number', step:'0.25', unit:' ساعة' },
+  leave: { label:'إجازة', icon:'إجا',
+    subs:[{v:'annual',l:'سنوية'},{v:'casual',l:'طارئة'},{v:'sick',l:'مرضية'},{v:'unpaid',l:'بدون مرتب'}],
+    valueLabel:'عدد الأيام', valueType:'number', step:'0.5', unit:' يوم', default:'1' },
+  overtime: { label:'عمل إضافي', icon:'إضا',
+    subs:[{v:'approved',l:'معتمد'},{v:'unapproved',l:'غير معتمد'}],
+    valueLabel:'عدد الساعات', valueType:'number', step:'0.25', unit:' ساعة' },
+};
+
+function subLabel(type, subVal){
+  const cfg = TYPE_CONFIG[type];
+  const s = cfg.subs.find(s=>s.v===subVal);
+  return s ? s.l : subVal;
+}
+function badgeClass(subVal){
+  if(subVal==='approved' || subVal==='in' || subVal==='issue') return 'ok';
+  if(subVal==='unapproved' || subVal==='out') return 'no';
+  return 'neu';
+}
+function formatValue(t){
+  const cfg = TYPE_CONFIG[t.type];
+  if(cfg.valueType==='time') return t.value;
+  const n = Number(t.value);
+  const nStr = (cfg.unit===' د.ل') ? n.toFixed(2) : (Number.isInteger(n) ? String(n) : n.toFixed(2));
+  return nStr + cfg.unit;
+}
+
+/* ======================= BALANCE ENGINE ======================= */
+function txSortKey(t){ return t.date + '_' + (t.createdAt||0); }
+
+// returns {orderedTx, balanceById, finalBalance, totalIssued, totalRepaid}
+function computeEmployeeLedger(empId){
+  const txs = transactions.filter(t=>t.employeeId===empId).slice().sort((a,b)=> txSortKey(a) < txSortKey(b) ? -1 : (txSortKey(a) > txSortKey(b) ? 1 : 0));
+  let balance = 0, totalIssued = 0, totalRepaid = 0;
+  const balanceById = {};
+  txs.forEach(t=>{
+    if(t.type==='loan'){
+      const v = Number(t.value)||0;
+      if(t.subCategory==='issue'){ balance += v; totalIssued += v; }
+      else if(t.subCategory==='repay'){ balance -= v; totalRepaid += v; }
+    }
+    balanceById[t.id] = balance;
+  });
+  return { txs, balanceById, finalBalance: balance, totalIssued, totalRepaid };
+}
+
+/* ======================= NAVIGATION ======================= */
+const PAGE_META = {
+  overview:{title:'نظرة عامة', sub:'ملخص سريع لحالة الحضور والسلف والإجازات'},
+  transactions:{title:'تسجيل الحركات', sub:'تسجيل حركة يومية جديدة ومراجعة السجل'},
+  employees:{title:'الموظفون', sub:'إدارة بيانات الموظفين ومتابعة أرصدة السلف'},
+  reports:{title:'التقارير والتصدير', sub:'استخراج تقرير حركي تفصيلي وتصديره إلى Excel'},
+  import:{title:'استيراد من Excel', sub:'استيراد سجلات حضور وانصراف جماعية مع فحص شامل للأخطاء'},
+  settings:{title:'الإعدادات', sub:'هوية تقرير PDF، فترات السماح، العطل الرسمية، وقواعد الحركات المتكررة'},
+};
+document.querySelectorAll('.navitem').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.navitem').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    const view = btn.dataset.view;
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById('view-'+view).classList.add('active');
+    document.getElementById('page-title').textContent = PAGE_META[view].title;
+    document.getElementById('page-sub').textContent = PAGE_META[view].sub;
+    if(view==='overview') renderOverview();
+    if(view==='transactions') renderTxView();
+    if(view==='employees') renderEmployees();
+    if(view==='reports') renderReportsSetup();
+    if(view==='import') renderImportView();
+    if(view==='settings') renderSettingsView();
+  });
+});
+
+/* ======================= TOAST ======================= */
+let toastTimer;
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>el.classList.remove('show'), 2600);
+}
+
+/* ======================= TODAY CHIP ======================= */
+function todayStr(){
+  const d = new Date();
+  return d.toISOString().slice(0,10);
+}
+(function initTodayChip(){
+  const d = new Date();
+  const fmt = new Intl.DateTimeFormat('ar-LY',{weekday:'long', year:'numeric', month:'long', day:'numeric'});
+  document.getElementById('today-chip').textContent = fmt.format(d);
+})();
+
+/* ======================= SELECT POPULATION HELPERS ======================= */
+// Appends a single <option> to a <select>, returning it for further tweaks.
+function appendOption(sel, value, text){
+  const o = document.createElement('option');
+  o.value = value; o.textContent = text;
+  sel.appendChild(o);
+  return o;
+}
+// Clears `sel` (unless opts.clear===false) then appends one <option> per
+// item, using valueFn/labelFn to derive each option's value/text.
+function populateSelect(sel, items, valueFn, labelFn, opts){
+  if(!opts || opts.clear!==false) sel.innerHTML = '';
+  items.forEach(item=> appendOption(sel, valueFn(item), labelFn(item)));
+}
+
+/* ======================= EMPLOYEE SELECTS ======================= */
+function fillEmployeeSelect(sel, includeAllOption){
+  sel.innerHTML = '';
+  if(includeAllOption){
+    appendOption(sel, 'all', 'جميع الموظفين (تقرير جماعي)');
+  }
+  if(employees.length===0 && !includeAllOption){
+    appendOption(sel, '', '— لا يوجد موظفون مضافون —');
+    return;
+  }
+  const sorted = employees.slice().sort((a,b)=>a.name.localeCompare(b.name,'ar'));
+  populateSelect(sel, sorted, e=>e.id, e=>`${e.name} (${e.code})`, {clear:false});
+}
+
+// Live name/code filter for the transaction form's employee select — same
+// options fillEmployeeSelect would produce, narrowed to the search text,
+// while preserving the current selection if it still matches.
+function filterTxEmployeeSelect(){
+  const sel = document.getElementById('tx-employee');
+  const query = document.getElementById('tx-employee-search').value.trim();
+  const prevValue = sel.value;
+  if(employees.length===0){
+    sel.innerHTML = '';
+    appendOption(sel, '', '— لا يوجد موظفون مضافون —');
+    return;
+  }
+  const sorted = employees.slice().sort((a,b)=>a.name.localeCompare(b.name,'ar'));
+  const filtered = query ? sorted.filter(e=> e.name.includes(query) || (e.code && e.code.includes(query))) : sorted;
+  sel.innerHTML = '';
+  if(filtered.length===0){
+    appendOption(sel, '', '— لا نتائج مطابقة —');
+    return;
+  }
+  populateSelect(sel, filtered, e=>e.id, e=>`${e.name} (${e.code})`, {clear:false});
+  if(filtered.some(e=>e.id===prevValue)) sel.value = prevValue;
+}
+document.getElementById('tx-employee-search').addEventListener('input', filterTxEmployeeSelect);
+document.getElementById('tx-records-search').addEventListener('input', renderTxTable);
+document.getElementById('overview-records-search').addEventListener('input', renderOverview);
+document.getElementById('overview-employee-filter').addEventListener('change', renderOverview);
+
+/* ======================= TRANSACTIONS VIEW ======================= */
+function fillTypeSelect(sel){
+  populateSelect(sel, Object.keys(TYPE_CONFIG), k=>k, k=>TYPE_CONFIG[k].label);
+}
+// Generic type-dependent field updater, reused by both the add-transaction
+// form (prefix 'tx') and the edit-transaction modal (prefix 'edit-tx').
+function updateTypeDependentFields(prefix){
+  const type = document.getElementById(prefix+'-type').value;
+  const cfg = TYPE_CONFIG[type];
+  const subSel = document.getElementById(prefix+'-sub');
+  const prevSub = subSel.value;
+  populateSelect(subSel, cfg.subs, s=>s.v, s=>s.l);
+  if(cfg.subs.some(s=>s.v===prevSub)) subSel.value = prevSub;
+  const subLabelEl = document.getElementById(prefix+'-sub-label');
+  if(subLabelEl) subLabelEl.textContent = 'التصنيف الفرعي';
+  const valueLabelEl = document.getElementById(prefix+'-value-label');
+  if(valueLabelEl) valueLabelEl.textContent = cfg.valueLabel;
+  const valInput = document.getElementById(prefix+'-value');
+  const isLeave = (prefix==='tx' && type==='leave');
+  if(cfg.valueType==='time'){
+    valInput.type='time'; valInput.step='';
+  } else {
+    valInput.type='number'; valInput.min='0'; valInput.step = cfg.step || '1';
+    if(!valInput.value) valInput.value = cfg.default || '';
+  }
+  // Only the primary add-form supports bulk leave-by-range entry.
+  if(prefix==='tx'){
+    document.getElementById('tx-date-wrap').style.display = isLeave ? 'none' : '';
+    document.getElementById('tx-range-wrap').classList.toggle('show', isLeave);
+    document.getElementById('tx-range-hint').style.display = isLeave ? 'block' : 'none';
+    document.getElementById('tx-value-wrap').style.display = isLeave ? 'none' : '';
+    document.getElementById('tx-date').required = !isLeave;
+    document.getElementById('tx-value').required = !isLeave;
+    document.getElementById('tx-leave-from').required = isLeave;
+    document.getElementById('tx-leave-to').required = isLeave;
+  }
+}
+function renderTypeLegend(){
+  const wrap = document.getElementById('type-legend');
+  wrap.innerHTML = '';
+  Object.values(TYPE_CONFIG).forEach(c=>{
+    const s = document.createElement('span');
+    s.textContent = c.label;
+    wrap.appendChild(s);
+  });
+}
+
+document.getElementById('tx-type').addEventListener('change', ()=>updateTypeDependentFields('tx'));
+
+// Returns the list of ISO dates within [from,to] (inclusive) that are
+// configured as working days for this employee's daily schedule.
+// Builds a yyyy-mm-dd string from a Date's LOCAL calendar fields (as
+// opposed to Date#toISOString, which reports the UTC date and therefore
+// shifts a whole day backward for any timezone ahead of UTC — e.g. a
+// local midnight of 2026-08-23 becomes "2026-08-22T22:00:00Z", so
+// toISOString() would wrongly read back "2026-08-22").
+function toLocalISODate(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
+// Iterates each calendar day from `from` to `to` (inclusive), calling
+// callback(dateObj) for every day. Mirrors the previous per-callsite
+// `while(d<=end){...; d.setDate(d.getDate()+1);}` loops exactly.
+function forEachDateInRange(from, to, callback){
+  let d = new Date(from+'T00:00:00');
+  const end = new Date(to+'T00:00:00');
+  while(d <= end){
+    callback(d);
+    d.setDate(d.getDate()+1);
+  }
+}
+
+function workdaysInRange(emp, from, to){
+  const out = [];
+  const excludeHolidays = excludeHolidaysFromLeave();
+  const excludeFriday = excludeFridayFromLeave();
+  forEachDateInRange(from, to, d=>{
+    const iso = toLocalISODate(d);
+    const shift = getDayShift(emp, d.getDay());
+    const isExcludedHoliday = excludeHolidays && isHoliday(iso);
+    const isExcludedFriday = excludeFriday && d.getDay()===5;
+    if(shift.enabled && !isExcludedHoliday && !isExcludedFriday) out.push(iso);
+  });
+  return out;
+}
+
+// Conflict resolution for the leave-range populator: if a manual attendance
+// record lands on a specific day that already carries a leave record, that
+// single day's leave is cancelled and replaced by attendance — the leave
+// days immediately before and after are left untouched, so the rest of the
+// range stays intact as continuous leave.
+function resolveLeaveConflictOnAttendance(employeeId, date){
+  const before = transactions.length;
+  transactions = transactions.filter(t=> !(t.employeeId===employeeId && t.date===date && t.type==='leave'));
+  return before - transactions.length;
+}
+
+// A transaction is considered an exact duplicate when it matches another
+// record on employee + date + type + subCategory + value. excludeTxId lets
+// an edit-in-place check ignore the record being edited.
+function isDuplicateTx(employeeId, date, type, subCategory, value, excludeTxId){
+  return transactions.some(t=>
+    t.id!==excludeTxId &&
+    t.employeeId===employeeId && t.date===date &&
+    t.type===type && t.subCategory===subCategory &&
+    String(t.value)===String(value)
+  );
+}
+
+// Scans the whole log for groups of exact duplicates (same employee, date,
+// type, subCategory, value) and removes every copy but the earliest one in
+// each group.
+function clearDuplicateTx(){
+  if(transactions.length===0){ toast('لا توجد حركات في السجل'); return; }
+  if(!confirm('سيتم البحث عن الحركات المكررة تماماً (نفس الموظف والتاريخ والنوع والتصنيف والقيمة) وحذف كل نسخة زائدة مع الإبقاء على أقدم نسخة من كل حركة. هل تريد المتابعة؟')) return;
+  const sortedAsc = transactions.slice().sort((a,b)=> (a.createdAt||0) - (b.createdAt||0));
+  const seen = new Set();
+  const kept = [];
+  let removed = 0;
+  sortedAsc.forEach(t=>{
+    const key = `${t.employeeId}|${t.date}|${t.type}|${t.subCategory}|${t.value}`;
+    if(seen.has(key)){ removed++; } else { seen.add(key); kept.push(t); }
+  });
+  if(removed===0){ toast('لا توجد حركات مكررة في السجل'); return; }
+  transactions = kept;
+  saveTx();
+  renderTxTable();
+  renderOverview();
+  toast(`تم حذف ${removed} حركة مكررة من السجل، مع الإبقاء على أقدم نسخة من كل حركة`);
+}
+document.getElementById('btn-clear-duplicates').addEventListener('click', clearDuplicateTx);
+
+document.getElementById('tx-form').addEventListener('submit', function(e){
+  e.preventDefault();
+  if(employees.length===0){ toast('أضف موظفاً واحداً على الأقل أولاً من صفحة «الموظفون»'); return; }
+  const employeeId = document.getElementById('tx-employee').value;
+  const type = document.getElementById('tx-type').value;
+  const subCategory = document.getElementById('tx-sub').value;
+  const notes = document.getElementById('tx-notes').value.trim();
+  if(!employeeId || !type || !subCategory){ toast('يرجى تعبئة جميع الحقول المطلوبة'); return; }
+
+  if(type==='leave'){
+    const from = document.getElementById('tx-leave-from').value;
+    const to = document.getElementById('tx-leave-to').value;
+    if(!from || !to){ toast('يرجى تحديد نطاق تاريخ الإجازة (من - إلى)'); return; }
+    if(from > to){ toast('تاريخ «من» يجب أن يسبق تاريخ «إلى»'); return; }
+    const emp = employees.find(x=>x.id===employeeId);
+    const rawDates = workdaysInRange(emp, from, to);
+    // Regulatory rule: an employee cannot hold two leave records — of any
+    // sub-type (e.g. annual + sick) — on the same calendar date. Days that
+    // already carry a leave record for this employee are skipped here
+    // rather than overwritten.
+    const conflictDates = rawDates.filter(d => transactions.some(t=>t.employeeId===employeeId && t.date===d && t.type==='leave'));
+    const dates = rawDates.filter(d => !conflictDates.includes(d));
+    if(dates.length===0){
+      toast(conflictDates.length>0 ? 'جميع أيام هذا النطاق تحمل بالفعل سجل إجازة لهذا الموظف' : 'لا توجد أيام عمل ضمن هذا النطاق وفق جدول الموظف');
+      return;
+    }
+    const ruleViolation = findRuleViolation(employeeId, 'leave', subCategory, from, null);
+    if(ruleViolation && !confirmRuleOverride(ruleViolation, 'leave', subCategory)) return;
+    const now = Date.now();
+    dates.forEach((d,i)=>{
+      transactions.push({ id: uid('tx'), employeeId, date:d, type:'leave', subCategory, value:'1', notes, createdAt: now+i });
+    });
+    saveTx();
+    const totalDaysInRange = Math.round((new Date(to)-new Date(from))/86400000)+1;
+    const skippedOffOrHoliday = totalDaysInRange - rawDates.length;
+    const msgParts = [];
+    if(skippedOffOrHoliday>0) msgParts.push(`${skippedOffOrHoliday} يوم راحة أسبوعية و/أو عطلة رسمية`);
+    if(conflictDates.length>0) msgParts.push(`${conflictDates.length} يوم يحمل إجازة مسجلة مسبقاً`);
+    toast(`تم تسجيل إجازة لـ ${dates.length} يوم عمل${msgParts.length ? ` (تم تجاهل ${msgParts.join(' و')})` : ''}`);
+  } else {
+    const date = document.getElementById('tx-date').value;
+    const valueRaw = document.getElementById('tx-value').value;
+    if(!date || valueRaw===''){ toast('يرجى تعبئة جميع الحقول المطلوبة'); return; }
+    const cfg = TYPE_CONFIG[type];
+    if(cfg.valueType!=='time' && Number(valueRaw) < 0){ toast('القيمة يجب ألا تكون سالبة'); return; }
+    if(isDuplicateTx(employeeId, date, type, subCategory, valueRaw, null)){
+      toast('تم رفض الحفظ: هذه الحركة مطابقة تماماً لحركة مسجّلة مسبقاً لنفس الموظف والتاريخ والنوع والتصنيف والقيمة');
+      return;
+    }
+    let conflictMsg = '';
+    if(type==='attendance' && resolveLeaveConflictOnAttendance(employeeId, date) > 0){
+      conflictMsg = ' — تم إلغاء إجازة هذا اليوم تحديداً واستبدالها بالحضور';
+    }
+    const ruleViolation = findRuleViolation(employeeId, type, subCategory, date, null);
+    if(ruleViolation && !confirmRuleOverride(ruleViolation, type, subCategory)) return;
+    transactions.push({ id: uid('tx'), employeeId, date, type, subCategory, value: valueRaw, notes, createdAt: Date.now() });
+    saveTx();
+    toast('تم حفظ الحركة بنجاح' + conflictMsg);
+  }
+  document.getElementById('tx-notes').value = '';
+  updateTypeDependentFields('tx');
+  renderTxTable();
+  renderOverview();
+});
+
+function deleteTx(id){
+  if(!confirm('هل تريد حذف هذه الحركة نهائياً؟')) return;
+  transactions = transactions.filter(t=>t.id!==id);
+  saveTx();
+  renderTxTable();
+  renderOverview();
+  toast('تم حذف الحركة');
+}
+
+function empLabel(id){
+  const e = employees.find(x=>x.id===id);
+  return e ? `${e.name} (${e.code})` : '—';
+}
+
+function renderTxTable(){
+  const body = document.getElementById('tx-table-body');
+  const searchEl = document.getElementById('tx-records-search');
+  const query = searchEl ? searchEl.value.trim().toLowerCase() : '';
+  let sorted = transactions.slice().sort((a,b)=> (b.createdAt||0) - (a.createdAt||0));
+  document.getElementById('tx-count-badge').textContent = transactions.length;
+  if(query){
+    // Split into words so a combined search like "أحمد دفعة" (employee + movement
+    // name) matches records where each word is found somewhere in the record's
+    // searchable text — letting the user narrow to one employee's payment
+    // movements, for example, without losing the plain single-word search.
+    const words = query.split(/\s+/).filter(Boolean);
+    sorted = sorted.filter(t=>{
+      const emp = empLabel(t.employeeId).toLowerCase();
+      const typeLabel = (TYPE_CONFIG[t.type] ? TYPE_CONFIG[t.type].label : '').toLowerCase();
+      const sub = subLabel(t.type, t.subCategory).toLowerCase();
+      const notes = (t.notes || '').toLowerCase();
+      const haystack = `${emp} ${typeLabel} ${sub} ${notes}`;
+      return words.every(w=> haystack.includes(w));
+    });
+  }
+  if(sorted.length===0){
+    body.innerHTML = `<tr class="empty-row"><td colspan="8">${query ? 'لا توجد حركات مطابقة لبحثك' : 'لا توجد حركات مسجّلة بعد'}</td></tr>`;
+    return;
+  }
+  body.innerHTML = sorted.map(t=>`
+    <tr>
+      <td>${empLabel(t.employeeId)}</td>
+      <td class="num">${t.date}</td>
+      <td>${TYPE_CONFIG[t.type].label}</td>
+      <td><span class="badge ${badgeClass(t.subCategory)}">${subLabel(t.type,t.subCategory)}</span></td>
+      <td class="num">${formatValue(t)}</td>
+      <td>${t.notes ? t.notes : '<span style="color:var(--muted)">—</span>'}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="openEditTx('${t.id}')">تعديل</button></td>
+      <td><button class="btn btn-danger" onclick="deleteTx('${t.id}')">حذف</button></td>
+    </tr>
+  `).join('');
+}
+
+/* ---- Edit transaction modal (historical correction + audit) ---- */
+const editTxOverlay = document.getElementById('edit-tx-overlay');
+function openEditTx(id){
+  const t = transactions.find(x=>x.id===id);
+  if(!t) return;
+  fillEmployeeSelect(document.getElementById('edit-tx-employee'), false);
+  document.getElementById('edit-tx-id').value = t.id;
+  document.getElementById('edit-tx-employee').value = t.employeeId;
+  document.getElementById('edit-tx-date').value = t.date;
+  const typeSel = document.getElementById('edit-tx-type');
+  if(typeSel.options.length===0) fillTypeSelect(typeSel);
+  typeSel.value = t.type;
+  updateTypeDependentFields('edit-tx');
+  document.getElementById('edit-tx-sub').value = t.subCategory;
+  document.getElementById('edit-tx-value').value = t.value;
+  document.getElementById('edit-tx-notes').value = t.notes || '';
+  editTxOverlay.classList.add('show');
+}
+document.getElementById('edit-tx-type').addEventListener('change', ()=>updateTypeDependentFields('edit-tx'));
+function closeEditTx(){ editTxOverlay.classList.remove('show'); }
+document.getElementById('edit-tx-close').addEventListener('click', closeEditTx);
+document.getElementById('edit-tx-cancel').addEventListener('click', closeEditTx);
+editTxOverlay.addEventListener('click', e=>{ if(e.target===editTxOverlay) closeEditTx(); });
+
+document.getElementById('edit-tx-form').addEventListener('submit', function(e){
+  e.preventDefault();
+  const id = document.getElementById('edit-tx-id').value;
+  const t = transactions.find(x=>x.id===id);
+  if(!t) return;
+  const employeeId = document.getElementById('edit-tx-employee').value;
+  const date = document.getElementById('edit-tx-date').value;
+  const type = document.getElementById('edit-tx-type').value;
+  const subCategory = document.getElementById('edit-tx-sub').value;
+  const valueRaw = document.getElementById('edit-tx-value').value;
+  const notes = document.getElementById('edit-tx-notes').value.trim();
+  if(!employeeId || !date || !type || !subCategory || valueRaw===''){ toast('يرجى تعبئة جميع الحقول المطلوبة'); return; }
+  const cfg = TYPE_CONFIG[type];
+  if(cfg.valueType!=='time' && Number(valueRaw) < 0){ toast('القيمة يجب ألا تكون سالبة'); return; }
+  if(type==='leave' && transactions.some(x=> x.id!==t.id && x.employeeId===employeeId && x.date===date && x.type==='leave')){
+    toast('يوجد بالفعل سجل إجازة لهذا الموظف في هذا التاريخ — لا يمكن تسجيل نوعي إجازة في نفس اليوم'); return;
+  }
+  if(isDuplicateTx(employeeId, date, type, subCategory, valueRaw, t.id)){
+    toast('تم رفض الحفظ: هذه الحركة أصبحت مطابقة تماماً لحركة مسجّلة مسبقاً لنفس الموظف والتاريخ والنوع والتصنيف والقيمة');
+    return;
+  }
+  const ruleViolation = findRuleViolation(employeeId, type, subCategory, date, t.id);
+  if(ruleViolation && !confirmRuleOverride(ruleViolation, type, subCategory)) return;
+  if(type==='attendance'){
+    // Exclude this same record from the conflict scan (it may itself have
+    // been the leave record being converted, e.g. via a type change).
+    const before = transactions.length;
+    transactions = transactions.filter(x=> x.id===t.id || !(x.employeeId===employeeId && x.date===date && x.type==='leave'));
+  }
+  // Mutate in place — every balance/report/aggregate is derived live from
+  // the transactions array, so this alone triggers full recalculation.
+  t.employeeId = employeeId; t.date = date; t.type = type; t.subCategory = subCategory;
+  t.value = valueRaw; t.notes = notes; t.editedAt = Date.now();
+  saveTx();
+  closeEditTx();
+  toast('تم تحديث الحركة وإعادة احتساب الأرصدة المتأثرة');
+  renderTxTable();
+  renderOverview();
+});
+
+function renderTxView(){
+  document.getElementById('tx-employee-search').value = '';
+  filterTxEmployeeSelect();
+  document.getElementById('tx-emp-hint').textContent = employees.length===0 ? 'لا يوجد موظفون بعد — أضف موظفاً من صفحة «الموظفون»' : '';
+  document.getElementById('tx-date').value = todayStr();
+  fillTypeSelect(document.getElementById('tx-type'));
+  updateTypeDependentFields('tx');
+  renderTypeLegend();
+  renderTxTable();
+
+  fillEmployeeSelect(document.getElementById('var-employee'), true);
+  if(!document.getElementById('var-from').value){
+    const now = new Date();
+    document.getElementById('var-from').value = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+    document.getElementById('var-to').value = todayStr();
+  }
+  document.getElementById('var-results').innerHTML = '';
+}
+
+/* ======================= SHIFT & VARIANCE ENGINE ======================= */
+// Detects tardiness / early departure / overtime by comparing logged
+// attendance in/out times against each employee's own shift schedule.
+// Skips any date+kind that has already been logged as a classified
+// transaction, so nothing is suggested (or importable) twice.
+function computeShiftVariances(empId, from, to){
+  const emp = employees.find(e=>e.id===empId);
+  if(!emp) return [];
+  const attTx = transactions.filter(t=>t.employeeId===empId && t.type==='attendance' && t.date>=from && t.date<=to);
+  const byDate = {};
+  attTx.forEach(t=>{ byDate[t.date] = byDate[t.date] || {}; byDate[t.date][t.subCategory] = t.value; });
+
+  const alreadyLogged = (date, kind) => transactions.some(t=>
+    t.employeeId===empId && t.date===date && t.type===kind);
+
+  const graceTardiness = gracePeriodTardinessMinutes();
+  const graceEarly = gracePeriodEarlyDepartureMinutes();
+
+  const results = [];
+  Object.keys(byDate).sort().forEach(date=>{
+    const day = byDate[date];
+    const shift = getDayShift(emp, dowOf(date), date);
+    if(!shift.enabled || !shift.start || !shift.end){
+      if(day.in || day.out){
+        results.push({ date, kind:'note', hours:0, detail:'حركة حضور/انصراف مسجّلة في يوم مُعرَّف كيوم راحة أسبوعية لهذا الموظف — راجع جدول الدوام' });
+      }
+      return;
+    }
+    if(day.in){
+      const lateMin = timeDiffMinutes(shift.start, day.in);
+      if(lateMin > 0 && lateMin > graceTardiness && !alreadyLogged(date,'tardiness')){
+        results.push({ date, kind:'tardiness', hours:(lateMin/60),
+          detail:`حضور الساعة ${day.in} مقابل بداية دوام ${shift.start} (يوم مستهدف بـ ${getDayTargetHours(emp,dowOf(date),date).toFixed(1)} ساعة)` });
+      }
+      // Arrival before the official shift start counts toward overtime.
+      const earlyArrivalMin = timeDiffMinutes(day.in, shift.start);
+      if(earlyArrivalMin > 0 && !alreadyLogged(date,'overtime')){
+        results.push({ date, kind:'overtime', hours:(earlyArrivalMin/60),
+          detail:`حضور الساعة ${day.in} قبل بداية دوام ${shift.start} (احتساب إضافي عن الحضور المبكر)` });
+      }
+    }
+    if(day.out){
+      const earlyMin = timeDiffMinutes(day.out, shift.end);
+      if(earlyMin > 0 && earlyMin > graceEarly && !alreadyLogged(date,'early_departure')){
+        results.push({ date, kind:'early_departure', hours:(earlyMin/60),
+          detail:`انصراف الساعة ${day.out} مقابل نهاية دوام ${shift.end}` });
+      }
+      const otMin = timeDiffMinutes(shift.end, day.out);
+      if(otMin > 0 && !alreadyLogged(date,'overtime')){
+        results.push({ date, kind:'overtime', hours:(otMin/60),
+          detail:`انصراف الساعة ${day.out} بعد نهاية دوام ${shift.end}` });
+      }
+    }
+  });
+  return results;
+}
+
+function quickLogVariance(empId, date, kind, hours, detail, subCategory){
+  transactions.push({
+    id: uid('tx'), employeeId: empId, date, type: kind, subCategory,
+    value: hours.toFixed(2), notes: detail + ' (محتسب تلقائياً وفق جدول الموظف)',
+    createdAt: Date.now()
+  });
+  saveTx();
+  toast('تم تسجيل الحركة');
+  renderTxTable();
+  renderOverview();
+  runVarianceScan();
+}
+
+let lastVarianceEmp = null;
+function runVarianceScan(){
+  const empId = document.getElementById('var-employee').value;
+  const from = document.getElementById('var-from').value;
+  const to = document.getElementById('var-to').value;
+  const wrap = document.getElementById('var-results');
+  if(!empId){ wrap.innerHTML = '<p style="color:var(--muted);font-size:12.8px;">اختر موظفاً لعرض الفوارق المحتسبة وفق جدوله الرسمي.</p>'; return; }
+  if(!from || !to){ toast('حدد النطاق الزمني لفحص الفوارق'); return; }
+  lastVarianceEmp = empId;
+
+  const targetEmps = empId==='all'
+    ? employees.slice().sort((a,b)=>a.name.localeCompare(b.name,'ar'))
+    : employees.filter(e=>e.id===empId);
+
+  // Each result carries its own employee id so the action buttons below
+  // (and the "all employees" grouping) work correctly regardless of which
+  // employee(s) were scanned.
+  let results = [];
+  targetEmps.forEach(emp=>{
+    computeShiftVariances(emp.id, from, to).forEach(r=>{
+      results.push(Object.assign({ empId: emp.id, empLabel: `${emp.name} (${emp.code})` }, r));
+    });
+  });
+
+  if(results.length===0){
+    wrap.innerHTML = `<p style="color:var(--muted);font-size:12.8px;">لا توجد فوارق زمنية غير مسجّلة ضمن هذا النطاق${empId==='all' ? ' لأي موظف' : ''} — إما لعدم وجود بيانات حضور/انصراف، أو أنها مطابقة للجدول، أو مسجّلة مسبقاً.</p>`;
+    return;
+  }
+  const KIND_LABEL = { tardiness:'تأخير مكتشف', early_departure:'خروج مبكر مكتشف', overtime:'عمل إضافي مكتشف' };
+  const KIND_TONE = { tardiness:'tone-rust', early_departure:'tone-rust', overtime:'tone-gold' };
+  const showEmpLabel = empId==='all';
+  wrap.innerHTML = results.map(r=>{
+    const empPrefix = showEmpLabel ? `${r.empLabel} — ` : '';
+    if(r.kind==='note'){
+      return `<div class="variance-row"><div class="vinfo"><div class="vtype">${empPrefix}${r.date} <span class="badge neu">تنبيه</span></div><div class="vdetail">${r.detail}</div></div></div>`;
+    }
+    return `
+    <div class="variance-row ${KIND_TONE[r.kind]}">
+      <div class="vinfo">
+        <div class="vtype">${empPrefix}${KIND_LABEL[r.kind]} — ${r.date} <span class="badge neu">${r.hours.toFixed(2)} ساعة</span></div>
+        <div class="vdetail">${r.detail}</div>
+      </div>
+      <div class="vactions">
+        <button class="btn btn-ghost btn-sm" onclick="quickLogVariance('${r.empId}','${r.date}','${r.kind}',${r.hours},'${r.detail.replace(/'/g,"\\'")}','approved')">تسجيل كمعتمد</button>
+        <button class="btn btn-danger" onclick="quickLogVariance('${r.empId}','${r.date}','${r.kind}',${r.hours},'${r.detail.replace(/'/g,"\\'")}','unapproved')">تسجيل كغير معتمد</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+document.getElementById('var-scan').addEventListener('click', runVarianceScan);
+
+/* ======================= EMPLOYEES VIEW ======================= */
+const DAY_NAMES = ['أحد','اثنين','ثلاثاء','أربعاء','خميس','جمعة','سبت'];
+const DEFAULT_WORKDAYS = [0,1,2,3,4]; // legacy fallback, kept for backward compatibility only
+
+// Backward-compatible migration: fills missing shift fields on employees
+// created before this feature existed, without altering any existing data.
+function migrateEmployees(){
+  let changed = false;
+  employees.forEach(e=>{
+    if(!e.shiftStart){ e.shiftStart = '09:00'; changed = true; }
+    if(!e.shiftEnd){ e.shiftEnd = '16:00'; changed = true; }
+    if(!Array.isArray(e.workDays)){ e.workDays = DEFAULT_WORKDAYS.slice(); changed = true; }
+    if(!e.dailySchedule){ e.dailySchedule = buildDailyScheduleFromLegacy(e); changed = true; }
+    if(e.annualLeaveEntitlement===undefined || e.annualLeaveEntitlement===null){ e.annualLeaveEntitlement = 0; changed = true; }
+    if(e.birthDate===undefined || e.birthDate===null){ e.birthDate = ''; changed = true; }
+  });
+  if(changed) saveEmployees();
+}
+
+/* ======================= PRO-RATA LEAVE ENTITLEMENT ENGINE ======================= */
+// System calculation epoch: leave balances are never accounted for before
+// this date, regardless of an employee's actual hire date (per the fixed
+// validation date requirement). Historical periods before it are ignored.
+const LEAVE_CALC_EPOCH = '2026-01-01';
+// Age-based annual leave entitlement: employees under 50 accrue 30 days/year,
+// employees who have reached 50 or older accrue 45 days/year. Returns null
+// when no birth date is on file, so callers can fall back to the legacy
+// manually-entered entitlement for employees added before this field existed.
+function ageBasedAnnualLeaveDays(birthDate, asOfDate){
+  if(!birthDate) return null;
+  const b = new Date(birthDate+'T00:00:00');
+  const a = new Date(asOfDate+'T00:00:00');
+  if(isNaN(b) || isNaN(a)) return null;
+  let age = a.getFullYear() - b.getFullYear();
+  const beforeBirthdayThisYear = (a.getMonth() < b.getMonth()) || (a.getMonth()===b.getMonth() && a.getDate() < b.getDate());
+  if(beforeBirthdayThisYear) age--;
+  return age>=50 ? 45 : 30;
+}
+// Computes the pro-rata annual leave entitlement accrued for an employee as
+// of a given date, and the resulting remaining balance after deducting any
+// logged annual-leave days. Accrual is proportional to elapsed days since
+// the later of (hire date, LEAVE_CALC_EPOCH), at a rate of
+// (annualLeaveEntitlement / 365) days accrued per calendar day elapsed —
+// so a mid-year start naturally accrues a proportional fraction, and the
+// accrual keeps compounding correctly across subsequent full years too.
+function computeLeaveEntitlement(empId, asOf){
+  const emp = employees.find(e=>e.id===empId);
+  const asOfDate = asOf || todayStr();
+  const ageBased = ageBasedAnnualLeaveDays(emp && emp.birthDate, asOfDate);
+  const perYear = ageBased!==null ? ageBased : (Number(emp && emp.annualLeaveEntitlement) || 0);
+  const hire = (emp && emp.hire) || '';
+  const effectiveStart = (hire && hire > LEAVE_CALC_EPOCH) ? hire : LEAVE_CALC_EPOCH;
+  if(asOfDate < effectiveStart){
+    return { perYear, effectiveStart, accrued:0, consumed:0, remaining:0 };
+  }
+  const daysElapsed = Math.floor((new Date(asOfDate+'T00:00:00') - new Date(effectiveStart+'T00:00:00'))/86400000) + 1;
+  const accrued = perYear * (daysElapsed/365);
+  const consumed = transactions.filter(t=>
+    t.employeeId===empId && t.type==='leave' && t.subCategory==='annual' &&
+    t.date>=effectiveStart && t.date<=asOfDate
+  ).reduce((s,t)=>s+Number(t.value||0), 0);
+  return { perYear, effectiveStart, accrued, consumed, remaining: accrued - consumed };
+}
+
+function weeklyTotalHours(e){
+  let total = 0;
+  for(let d=0; d<7; d++) total += getDayTargetHours(e, d);
+  return total;
+}
+
+document.getElementById('emp-form').addEventListener('submit', function(e){
+  e.preventDefault();
+  const code = document.getElementById('emp-code').value.trim();
+  const name = document.getElementById('emp-name').value.trim();
+  const dept = document.getElementById('emp-dept').value.trim();
+  const hire = document.getElementById('emp-hire').value;
+  const birthDate = document.getElementById('emp-birthdate').value;
+  const leaveEntitlementRaw = document.getElementById('emp-leave-entitlement').value;
+  const annualLeaveEntitlement = leaveEntitlementRaw==='' ? 0 : Math.max(0, Number(leaveEntitlementRaw));
+  if(!code || !name){ toast('الرقم الوظيفي والاسم مطلوبان'); return; }
+  if(employees.some(x=>x.code.toLowerCase()===code.toLowerCase())){
+    toast('هذا الرقم الوظيفي مستخدم مسبقاً'); return;
+  }
+  const dailySchedule = defaultDailySchedule();
+  employees.push({
+    id: uid('emp'), code, name, dept, hire, birthDate, annualLeaveEntitlement,
+    shiftStart:'09:00', shiftEnd:'16:00', workDays:[6,0,1,2,3,4], // legacy mirror fields
+    dailySchedule
+  });
+  saveEmployees();
+  this.reset();
+  toast('تمت إضافة الموظف بإعداد الدوام الافتراضي — يمكن تخصيصه من بطاقته');
+  renderEmployees();
+});
+
+function deleteEmployee(id){
+  const hasTx = transactions.some(t=>t.employeeId===id);
+  const msg = hasTx
+    ? 'هذا الموظف لديه حركات مسجّلة. حذفه سيحذف جميع حركاته أيضاً. هل تريد المتابعة؟'
+    : 'هل تريد حذف هذا الموظف؟';
+  if(!confirm(msg)) return;
+  employees = employees.filter(e=>e.id!==id);
+  transactions = transactions.filter(t=>t.employeeId!==id);
+  saveEmployees(); saveTx();
+  renderEmployees();
+  toast('تم حذف الموظف');
+}
+
+/* ---- Edit employee (profile) modal ---- */
+const editEmpOverlay = document.getElementById('edit-emp-overlay');
+function openEditEmployee(id){
+  const e = employees.find(x=>x.id===id);
+  if(!e) return;
+  document.getElementById('edit-emp-id').value = e.id;
+  document.getElementById('edit-emp-code').value = e.code;
+  document.getElementById('edit-emp-name').value = e.name;
+  document.getElementById('edit-emp-dept').value = e.dept || '';
+  document.getElementById('edit-emp-hire').value = e.hire || '';
+  document.getElementById('edit-emp-birthdate').value = e.birthDate || '';
+  document.getElementById('edit-emp-leave-entitlement').value = e.annualLeaveEntitlement || '';
+  editEmpOverlay.classList.add('show');
+}
+function closeEditEmployee(){ editEmpOverlay.classList.remove('show'); }
+document.getElementById('edit-emp-close').addEventListener('click', closeEditEmployee);
+document.getElementById('edit-emp-cancel').addEventListener('click', closeEditEmployee);
+editEmpOverlay.addEventListener('click', function(e){ if(e.target===editEmpOverlay) closeEditEmployee(); });
+
+document.getElementById('edit-emp-form').addEventListener('submit', function(e){
+  e.preventDefault();
+  const id = document.getElementById('edit-emp-id').value;
+  const emp = employees.find(x=>x.id===id);
+  if(!emp) return;
+  const code = document.getElementById('edit-emp-code').value.trim();
+  const name = document.getElementById('edit-emp-name').value.trim();
+  const dept = document.getElementById('edit-emp-dept').value.trim();
+  const hire = document.getElementById('edit-emp-hire').value;
+  const birthDate = document.getElementById('edit-emp-birthdate').value;
+  const leaveEntitlementRaw = document.getElementById('edit-emp-leave-entitlement').value;
+  const annualLeaveEntitlement = leaveEntitlementRaw==='' ? 0 : Math.max(0, Number(leaveEntitlementRaw));
+  if(!code || !name){ toast('الرقم الوظيفي والاسم مطلوبان'); return; }
+  if(employees.some(x=>x.id!==id && x.code.toLowerCase()===code.toLowerCase())){
+    toast('هذا الرقم الوظيفي مستخدم من قِبل موظف آخر'); return;
+  }
+  emp.code = code; emp.name = name; emp.dept = dept; emp.hire = hire; emp.birthDate = birthDate; emp.annualLeaveEntitlement = annualLeaveEntitlement;
+  saveEmployees();
+  closeEditEmployee();
+  toast('تم تحديث بيانات الموظف بنجاح');
+  renderEmployees();
+  renderTxView();
+});
+
+/* ---- Daily shift schedule modal ---- */
+const scheduleOverlay = document.getElementById('schedule-modal-overlay');
+let scheduleEmpId = null;
+function openScheduleModal(id){
+  const e = employees.find(x=>x.id===id);
+  if(!e) return;
+  scheduleEmpId = id;
+  document.getElementById('sched-emp-name').textContent = `${e.name} (${e.code})`;
+  renderScheduleRows(e.dailySchedule);
+  scheduleOverlay.classList.add('show');
+}
+function renderScheduleRows(schedule){
+  const order = [6,0,1,2,3,4,5]; // Sat..Fri display order
+  const body = document.getElementById('sched-table-body');
+  body.innerHTML = order.map(d=>{
+    const s = schedule[d] || COMPANY_DEFAULT_SCHEDULE[d];
+    const hrs = (s.enabled && s.start && s.end) ? Math.max(0, timeDiffMinutes(s.start,s.end)/60).toFixed(1) : '0.0';
+    return `
+    <tr class="${s.enabled?'':'off'}" data-day="${d}">
+      <td><input type="checkbox" class="sched-enabled" ${s.enabled?'checked':''} onchange="onScheduleRowToggle(this)"></td>
+      <td>${DAY_NAMES[d]}</td>
+      <td><input type="time" class="sched-start" value="${s.start||'09:00'}" ${s.enabled?'':'disabled'}></td>
+      <td><input type="time" class="sched-end" value="${s.end||'16:00'}" ${s.enabled?'':'disabled'}></td>
+      <td class="num sched-hours">${hrs} س</td>
+    </tr>`;
+  }).join('');
+  document.querySelectorAll('#sched-table-body .sched-start, #sched-table-body .sched-end').forEach(inp=>{
+    inp.addEventListener('input', ()=>recalcScheduleRowHours(inp.closest('tr')));
+  });
+}
+function onScheduleRowToggle(checkbox){
+  const tr = checkbox.closest('tr');
+  const enabled = checkbox.checked;
+  tr.classList.toggle('off', !enabled);
+  tr.querySelector('.sched-start').disabled = !enabled;
+  tr.querySelector('.sched-end').disabled = !enabled;
+  recalcScheduleRowHours(tr);
+}
+function recalcScheduleRowHours(tr){
+  const enabled = tr.querySelector('.sched-enabled').checked;
+  const start = tr.querySelector('.sched-start').value;
+  const end = tr.querySelector('.sched-end').value;
+  const cell = tr.querySelector('.sched-hours');
+  if(!enabled || !start || !end){ cell.textContent = '0.0 س'; return; }
+  cell.textContent = Math.max(0, timeDiffMinutes(start,end)/60).toFixed(1) + ' س';
+}
+document.getElementById('sched-apply-default').addEventListener('click', function(){
+  renderScheduleRows(defaultDailySchedule());
+});
+document.getElementById('schedule-modal-close').addEventListener('click', ()=>scheduleOverlay.classList.remove('show'));
+document.getElementById('sched-cancel').addEventListener('click', ()=>scheduleOverlay.classList.remove('show'));
+scheduleOverlay.addEventListener('click', e=>{ if(e.target===scheduleOverlay) scheduleOverlay.classList.remove('show'); });
+document.getElementById('sched-save').addEventListener('click', function(){
+  const emp = employees.find(x=>x.id===scheduleEmpId);
+  if(!emp) return;
+  const newSchedule = {};
+  let anyInvalid = false;
+  document.querySelectorAll('#sched-table-body tr').forEach(tr=>{
+    const d = Number(tr.dataset.day);
+    const enabled = tr.querySelector('.sched-enabled').checked;
+    const start = tr.querySelector('.sched-start').value;
+    const end = tr.querySelector('.sched-end').value;
+    if(enabled && (!start || !end || start>=end)) anyInvalid = true;
+    newSchedule[d] = enabled ? { enabled:true, start, end } : { enabled:false, start:'', end:'' };
+  });
+  if(anyInvalid){ toast('تأكد من أن وقت البداية أسبق من وقت النهاية في كل يوم مُفعّل'); return; }
+  emp.dailySchedule = newSchedule;
+  // keep legacy mirror fields loosely in sync for any older code paths
+  const firstEnabled = Object.values(newSchedule).find(s=>s.enabled);
+  if(firstEnabled){ emp.shiftStart = firstEnabled.start; emp.shiftEnd = firstEnabled.end; }
+  emp.workDays = Object.keys(newSchedule).filter(d=>newSchedule[d].enabled).map(Number);
+  saveEmployees();
+  scheduleOverlay.classList.remove('show');
+  toast('تم حفظ جدول الدوام بنجاح');
+  renderEmployees();
+  renderTxView();
+});
+
+function renderEmployees(){
+  const list = document.getElementById('emp-list');
+  document.getElementById('emp-count-badge').textContent = employees.length;
+  if(employees.length===0){
+    list.innerHTML = '<div class="card" style="grid-column:1/-1;text-align:center;color:var(--muted);">لا يوجد موظفون بعد. أضف أول موظف من النموذج أعلاه.</div>';
+    return;
+  }
+  list.innerHTML = employees.slice().sort((a,b)=>a.name.localeCompare(b.name,'ar')).map(e=>{
+    const ledger = computeEmployeeLedger(e.id);
+    const pct = ledger.totalIssued>0 ? Math.min(100, Math.round((ledger.totalRepaid/ledger.totalIssued)*100)) : 0;
+    const ringColor = ledger.finalBalance>0 ? 'var(--gold)' : 'var(--teal)';
+    const weekChips = DAY_NAMES.map((n,i)=>{
+      const s = getDayShift(e,i);
+      const label = s.enabled ? getDayTargetHours(e,i).toFixed(1) : n[0];
+      return `<span class="dchip ${s.enabled?'on':''}" title="${n}: ${s.enabled? s.start+'–'+s.end : 'راحة'}">${label}</span>`;
+    }).join('');
+    return `
+    <div class="emp-card">
+      <div class="dial" style="background:conic-gradient(${ringColor} ${pct*3.6}deg, var(--surface-alt) 0deg);">
+        <div class="hole">
+          <div class="b">${ledger.finalBalance.toFixed(0)}</div>
+          <div class="b" style="font-weight:500;color:var(--muted);">د.ل</div>
+        </div>
+      </div>
+      <div class="emp-info">
+        <div class="nm">${e.name}</div>
+        <div class="cd">${e.code}${e.dept? ' · '+e.dept : ''}</div>
+        <div class="dp">${ledger.finalBalance>0 ? `رصيد سلف قائم: ${ledger.finalBalance.toFixed(2)} د.ل` : 'لا يوجد رصيد سلف قائم'}</div>
+        ${(e.annualLeaveEntitlement>0 || e.birthDate) ? `<div class="dp">رصيد الإجازات السنوية المتبقي: ${computeLeaveEntitlement(e.id).remaining.toFixed(1)} يوم</div>` : ''}
+        <div class="shift-badge">⏱ ${weeklyTotalHours(e).toFixed(1)} س/أسبوعياً</div>
+        <div class="week-summary">${weekChips}</div>
+      </div>
+      <div class="emp-actions" style="display:flex;flex-direction:column;gap:6px;">
+        <button class="btn btn-ghost btn-sm" onclick="openEditEmployee('${e.id}')">تعديل</button>
+        <button class="btn btn-ghost btn-sm" onclick="openScheduleModal('${e.id}')">جدول الدوام</button>
+        <button class="btn btn-danger" onclick="deleteEmployee('${e.id}')">حذف</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ======================= OVERVIEW ======================= */
+function renderOverview(){
+  const empFilterEl = document.getElementById('overview-employee-filter');
+  if(empFilterEl){
+    const prevSelected = empFilterEl.value;
+    const sortedEmployees = employees.slice().sort((a,b)=>a.name.localeCompare(b.name,'ar'));
+    empFilterEl.innerHTML = '<option value="">جميع الموظفين</option>' +
+      sortedEmployees.map(e=>`<option value="${e.id}">${e.name} (${e.code})</option>`).join('');
+    if(sortedEmployees.some(e=>e.id===prevSelected)) empFilterEl.value = prevSelected;
+  }
+  const totalOutstanding = employees.reduce((sum,e)=> sum + computeEmployeeLedger(e.id).finalBalance, 0);
+  const today = todayStr();
+  const todayCount = transactions.filter(t=>t.date===today).length;
+  const thisMonth = today.slice(0,7);
+  const leaveThisMonth = transactions.filter(t=>t.type==='leave' && t.date.slice(0,7)===thisMonth).length;
+
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="stat-card accent-ink">
+      <div class="label">عدد الموظفين</div>
+      <div class="value">${employees.length}</div>
+      <div class="foot">إجمالي المسجّلين في النظام</div>
+    </div>
+    <div class="stat-card accent-gold">
+      <div class="label">إجمالي السلف القائمة</div>
+      <div class="value">${totalOutstanding.toFixed(2)}</div>
+      <div class="foot">دينار ليبي — عبر جميع الموظفين</div>
+    </div>
+    <div class="stat-card accent-teal">
+      <div class="label">حركات اليوم</div>
+      <div class="value">${todayCount}</div>
+      <div class="foot">${today}</div>
+    </div>
+    <div class="stat-card accent-rust">
+      <div class="label">إجازات هذا الشهر</div>
+      <div class="value">${leaveThisMonth}</div>
+      <div class="foot">جميع أنواع الإجازات</div>
+    </div>
+  `;
+
+  const searchEl = document.getElementById('overview-records-search');
+  const query = searchEl ? searchEl.value.trim().toLowerCase() : '';
+  const empFilterId = empFilterEl ? empFilterEl.value : '';
+  const eyebrow = document.getElementById('overview-recent-eyebrow');
+  let recent;
+  if(query || empFilterId){
+    const words = query.split(/\s+/).filter(Boolean);
+    recent = transactions.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).filter(t=>{
+      if(empFilterId && t.employeeId!==empFilterId) return false;
+      if(words.length===0) return true;
+      const emp = empLabel(t.employeeId).toLowerCase();
+      const typeLabel = (TYPE_CONFIG[t.type] ? TYPE_CONFIG[t.type].label : '').toLowerCase();
+      const sub = subLabel(t.type, t.subCategory).toLowerCase();
+      const notes = (t.notes || '').toLowerCase();
+      const haystack = `${emp} ${typeLabel} ${sub} ${notes}`;
+      return words.every(w=> haystack.includes(w));
+    });
+    if(eyebrow) eyebrow.textContent = `${recent.length} نتيجة`;
+  } else {
+    recent = transactions.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).slice(0,8);
+    if(eyebrow) eyebrow.textContent = 'آخر 8';
+  }
+  const body = document.getElementById('overview-recent');
+  if(recent.length===0){
+    body.innerHTML = `<tr class="empty-row"><td colspan="6">${(query||empFilterId) ? 'لا توجد حركات مطابقة لبحثك' : 'لا توجد حركات مسجّلة بعد'}</td></tr>`;
+  } else {
+    body.innerHTML = recent.map(t=>`
+      <tr>
+        <td>${empLabel(t.employeeId)}</td>
+        <td class="num">${t.date}</td>
+        <td>${TYPE_CONFIG[t.type].label}</td>
+        <td><span class="badge ${badgeClass(t.subCategory)}">${subLabel(t.type,t.subCategory)}</span></td>
+        <td class="num">${formatValue(t)}</td>
+        <td>${t.notes ? t.notes : '<span style="color:var(--muted)">—</span>'}</td>
+      </tr>
+    `).join('');
+  }
+}
+
+/* ======================= REPORTS ======================= */
+let lastReportRows = [];
+
+function renderReportsSetup(){
+  fillEmployeeSelect(document.getElementById('rep-employee'), true);
+  const from = document.getElementById('rep-from');
+  const to = document.getElementById('rep-to');
+  if(!from.value || !to.value){
+    const now = new Date();
+    const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+    from.value = firstOfMonth;
+    to.value = todayStr();
+  }
+  initBulkCommitmentReport();
+  initReportPdfEmpPicker();
+  const bulkFrom = document.getElementById('bulk-from');
+  const bulkTo = document.getElementById('bulk-to');
+  if(!bulkFrom.value || !bulkTo.value){
+    bulkFrom.value = from.value;
+    bulkTo.value = to.value;
+  }
+}
+
+function renderSettingsView(){
+  initOrgSettings();
+  initGracePeriodSettings();
+  initHolidaySettings();
+  initIntervalRuleSettings();
+  initScheduleOverrideSettings();
+}
+
+// Employee-list picker dedicated to the comprehensive PDF export — lets the
+// user narrow the PDF down to a specific subset of employees, independent
+// of the on-screen extraction table's employee dropdown (which still
+// drives the table itself and the CSV/Excel exports, unchanged).
+function initReportPdfEmpPicker(){
+  const box = document.getElementById('rep-pdf-emp-picker');
+  const selectAll = document.getElementById('rep-pdf-emp-select-all');
+  if(employees.length===0){
+    box.innerHTML = '<div class="holiday-list-empty">لا يوجد موظفون بعد</div>';
+  } else {
+    box.innerHTML = employees.map(e=>`
+      <label><input type="checkbox" class="rep-pdf-emp-cb" value="${e.id}" checked> ${e.name}</label>
+    `).join('');
+  }
+  if(!selectAll.dataset.bound){
+    selectAll.dataset.bound = '1';
+    selectAll.addEventListener('change', function(){
+      document.querySelectorAll('.rep-pdf-emp-cb').forEach(cb=> cb.checked = this.checked);
+    });
+  }
+}
+
+function computeWorkedHours(inTime, outTime){
+  if(!inTime || !outTime) return '';
+  const mins = timeDiffMinutes(inTime, outTime);
+  return mins > 0 ? (mins/60).toFixed(2) : '0.00';
+}
+
+function generateReport(){
+  const empSel = document.getElementById('rep-employee').value;
+  const from = document.getElementById('rep-from').value;
+  const to = document.getElementById('rep-to').value;
+  if(!from || !to){ toast('يرجى تحديد النطاق الزمني (من - إلى)'); return; }
+  if(from > to){ toast('تاريخ «من» يجب أن يسبق تاريخ «إلى»'); return; }
+
+  const targetIds = empSel==='all' ? employees.map(e=>e.id) : [empSel];
+  let rows = [];
+
+  targetIds.forEach(id=>{
+    const emp = employees.find(e=>e.id===id);
+    if(!emp) return;
+    const ledger = computeEmployeeLedger(id);
+    const attByDate = {};
+    ledger.txs.forEach(t=>{
+      if(t.type==='attendance'){ attByDate[t.date] = attByDate[t.date] || {}; attByDate[t.date][t.subCategory] = t.value; }
+    });
+    ledger.txs.forEach(t=>{
+      if(t.date < from || t.date > to) return;
+      const dow = dowOf(t.date);
+      const att = attByDate[t.date] || {};
+      const checkIn = att.in || '';
+      const checkOut = att.out || '';
+      const target = getDayTargetHours(emp, dow, t.date);
+      rows.push({
+        sortKey: (empSel==='all' ? emp.name + '_' : '') + t.date + '_' + (t.createdAt||0),
+        code: emp.code,
+        name: emp.name,
+        date: t.date,
+        dow: DAY_NAMES[dow],
+        checkIn, checkOut,
+        target: target.toFixed(2),
+        worked: computeWorkedHours(checkIn, checkOut),
+        type: TYPE_CONFIG[t.type].label,
+        sub: subLabel(t.type, t.subCategory),
+        subRaw: t.subCategory,
+        tardiness: t.type==='tardiness' ? `${Number(t.value).toFixed(2)} س (${subLabel(t.type,t.subCategory)})` : '',
+        early: t.type==='early_departure' ? `${Number(t.value).toFixed(2)} س (${subLabel(t.type,t.subCategory)})` : '',
+        overtime: t.type==='overtime' ? `${Number(t.value).toFixed(2)} س (${subLabel(t.type,t.subCategory)})` : '',
+        loanMove: t.type==='loan' ? `${t.subCategory==='issue'?'مستلم':'مسترجع'}: ${Number(t.value).toFixed(2)} د.ل` : '',
+        balance: ledger.balanceById[t.id].toFixed(2) + ' د.ل',
+        notes: t.notes || ''
+      });
+    });
+  });
+
+  rows.sort((a,b)=> a.sortKey < b.sortKey ? -1 : (a.sortKey > b.sortKey ? 1 : 0));
+  lastReportRows = rows;
+
+  document.getElementById('rep-count-badge').textContent = rows.length + ' حركة';
+  const body = document.getElementById('rep-table-body');
+  const dash = '<span style="color:var(--muted)">—</span>';
+  if(rows.length===0){
+    body.innerHTML = '<tr class="empty-row"><td colspan="16">لا توجد حركات ضمن النطاق الزمني المحدد</td></tr>';
+  } else {
+    body.innerHTML = rows.map(r=>`
+      <tr>
+        <td class="num">${r.code}</td>
+        <td>${r.name}</td>
+        <td class="num">${r.date}</td>
+        <td>${r.dow}</td>
+        <td class="num">${r.checkIn || dash}</td>
+        <td class="num">${r.checkOut || dash}</td>
+        <td class="num">${r.target}</td>
+        <td class="num">${r.worked || dash}</td>
+        <td>${r.type}</td>
+        <td><span class="badge ${badgeClass(r.subRaw)}">${r.sub}</span></td>
+        <td class="num">${r.tardiness || dash}</td>
+        <td class="num">${r.early || dash}</td>
+        <td class="num">${r.overtime || dash}</td>
+        <td>${r.loanMove || dash}</td>
+        <td class="num">${r.balance}</td>
+        <td>${r.notes || dash}</td>
+      </tr>
+    `).join('');
+  }
+  const hasRows = rows.length>0;
+  document.getElementById('rep-export-csv').disabled = !hasRows;
+  document.getElementById('rep-export-xlsx').disabled = !hasRows;
+  document.getElementById('rep-export-pdf').disabled = !hasRows;
+}
+document.getElementById('rep-generate').addEventListener('click', generateReport);
+
+function exportReport(format){
+  if(lastReportRows.length===0){ toast('لا توجد بيانات للتصدير'); return; }
+  const data = lastReportRows.map(r=>({
+    'كود الموظف': r.code,
+    'اسم الموظف': r.name,
+    'تاريخ الحركة': r.date,
+    'يوم الأسبوع': r.dow,
+    'وقت الدخول': r.checkIn,
+    'وقت الخروج': r.checkOut,
+    'الساعات المستهدفة': r.target,
+    'صافي ساعات العمل': r.worked,
+    'نوع الحركة الرئيسي': r.type,
+    'التصنيف الفرعي': r.sub,
+    'مدة التأخير': r.tardiness,
+    'مدة الخروج المبكر': r.early,
+    'مدة العمل الإضافي': r.overtime,
+    'حركة السلف المالية': r.loanMove,
+    'رصيد السلف المتبقي التراكمي': r.balance,
+    'البيان / الملاحظات': r.notes
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  ws['!cols'] = [{wch:12},{wch:20},{wch:12},{wch:10},{wch:9},{wch:9},{wch:11},{wch:11},{wch:16},{wch:20},{wch:16},{wch:16},{wch:14},{wch:20},{wch:18},{wch:30}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'تقرير الحضور والانصراف');
+  const from = document.getElementById('rep-from').value;
+  const to = document.getElementById('rep-to').value;
+  const fname = `تقرير_الحضور_${from}_الى_${to}.${format==='csv' ? 'csv' : 'xlsx'}`;
+  XLSX.writeFile(wb, fname, { bookType: format });
+  toast('تم تصدير الملف بنجاح');
+}
+document.getElementById('rep-export-xlsx').addEventListener('click', ()=>exportReport('xlsx'));
+document.getElementById('rep-export-csv').addEventListener('click', ()=>exportReport('csv'));
+
+/* ---- Organization branding settings (used in the PDF header) ---- */
+const LS_ORG_NAME = 'sijil_org_name_v1';
+const LS_ORG_LOGO = 'sijil_org_logo_v1';
+function initOrgSettings(){
+  const nameInput = document.getElementById('org-name-input');
+  if(nameInput.dataset.bound) return;
+  nameInput.dataset.bound = '1';
+  nameInput.value = localStorage.getItem(LS_ORG_NAME) || 'المؤسسة';
+  nameInput.addEventListener('change', ()=> localStorage.setItem(LS_ORG_NAME, nameInput.value.trim() || 'المؤسسة'));
+
+  const preview = document.getElementById('org-logo-preview');
+  const clearBtn = document.getElementById('org-logo-clear');
+  const savedLogo = localStorage.getItem(LS_ORG_LOGO);
+  if(savedLogo){ preview.src = savedLogo; preview.style.display='block'; clearBtn.style.display='inline-flex'; }
+
+  document.getElementById('org-logo-input').addEventListener('change', function(e){
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = function(evt){
+      localStorage.setItem(LS_ORG_LOGO, evt.target.result);
+      preview.src = evt.target.result; preview.style.display='block'; clearBtn.style.display='inline-flex';
+      toast('تم حفظ الشعار');
+    };
+    reader.readAsDataURL(file);
+  });
+  clearBtn.addEventListener('click', function(){
+    localStorage.removeItem(LS_ORG_LOGO);
+    preview.style.display='none'; clearBtn.style.display='none';
+    document.getElementById('org-logo-input').value = '';
+  });
+}
+
+/* ---- Grace period (minutes) before tardiness / early departure is counted ---- */
+const LS_GRACE_TARDINESS_MIN = 'sijil_grace_tardiness_min_v1';
+const LS_GRACE_EARLY_MIN = 'sijil_grace_early_min_v1';
+function gracePeriodTardinessMinutes(){
+  const v = Number(localStorage.getItem(LS_GRACE_TARDINESS_MIN));
+  return (Number.isFinite(v) && v > 0) ? v : 0;
+}
+function gracePeriodEarlyDepartureMinutes(){
+  const v = Number(localStorage.getItem(LS_GRACE_EARLY_MIN));
+  return (Number.isFinite(v) && v > 0) ? v : 0;
+}
+function initGracePeriodSettings(){
+  const tardInput = document.getElementById('grace-tardiness-input');
+  const earlyInput = document.getElementById('grace-early-input');
+  if(tardInput.dataset.bound) return;
+  tardInput.dataset.bound = '1';
+  tardInput.value = gracePeriodTardinessMinutes() || '';
+  tardInput.addEventListener('change', function(){
+    const v = Number(this.value);
+    localStorage.setItem(LS_GRACE_TARDINESS_MIN, (Number.isFinite(v) && v > 0) ? String(v) : '0');
+  });
+  earlyInput.value = gracePeriodEarlyDepartureMinutes() || '';
+  earlyInput.addEventListener('change', function(){
+    const v = Number(this.value);
+    localStorage.setItem(LS_GRACE_EARLY_MIN, (Number.isFinite(v) && v > 0) ? String(v) : '0');
+  });
+}
+
+/* ---- Official public holidays + admin-controlled leave-exclusion setting ---- */
+const LS_HOLIDAYS = 'sijil_holidays_v1';
+const LS_EXCLUDE_HOLIDAYS_FROM_LEAVE = 'sijil_exclude_holidays_from_leave_v1';
+const LS_EXCLUDE_FRIDAY_FROM_LEAVE = 'sijil_exclude_friday_from_leave_v1';
+
+function loadHolidays(){
+  return storage.getJSON(LS_HOLIDAYS, []);
+}
+function saveHolidays(list){
+  storage.setJSON(LS_HOLIDAYS, list);
+}
+function isHoliday(dateStr){
+  return loadHolidays().some(h=>h.date===dateStr);
+}
+// Admin-controlled: whether official holiday dates are skipped when the
+// leave-range populator generates annual-leave days (parallel to how
+// employees' own weekly rest days are already skipped).
+function excludeHolidaysFromLeave(){
+  return localStorage.getItem(LS_EXCLUDE_HOLIDAYS_FROM_LEAVE) === '1';
+}
+// Admin-controlled: whether Friday specifically is skipped when the
+// leave-range populator generates annual-leave days — independent of
+// (and in addition to) each employee's own configured weekly rest days.
+function excludeFridayFromLeave(){
+  return localStorage.getItem(LS_EXCLUDE_FRIDAY_FROM_LEAVE) === '1';
+}
+
+function renderHolidayList(){
+  const box = document.getElementById('holiday-list');
+  const holidays = loadHolidays().slice().sort((a,b)=> a.date < b.date ? -1 : 1);
+  if(holidays.length===0){
+    box.innerHTML = '<div class="holiday-list-empty">لم تُضَف أي عطلة رسمية بعد</div>';
+    return;
+  }
+  box.innerHTML = holidays.map(h=>`
+    <span class="holiday-chip">
+      <span class="hc-date">${h.date}</span>
+      ${h.label ? `<span>${h.label}</span>` : ''}
+      <button type="button" class="hc-remove" data-date="${h.date}" title="حذف">×</button>
+    </span>
+  `).join('');
+  box.querySelectorAll('.hc-remove').forEach(btn=>{
+    btn.addEventListener('click', function(){
+      const date = this.dataset.date;
+      saveHolidays(loadHolidays().filter(h=>h.date!==date));
+      renderHolidayList();
+      toast('تم حذف العطلة الرسمية');
+    });
+  });
+}
+
+function initHolidaySettings(){
+  const toggle = document.getElementById('exclude-holidays-toggle');
+  const fridayToggle = document.getElementById('exclude-friday-toggle');
+  if(!toggle.dataset.bound){
+    toggle.dataset.bound = '1';
+    toggle.checked = excludeHolidaysFromLeave();
+    toggle.addEventListener('change', function(){
+      localStorage.setItem(LS_EXCLUDE_HOLIDAYS_FROM_LEAVE, this.checked ? '1' : '0');
+    });
+    fridayToggle.checked = excludeFridayFromLeave();
+    fridayToggle.addEventListener('change', function(){
+      localStorage.setItem(LS_EXCLUDE_FRIDAY_FROM_LEAVE, this.checked ? '1' : '0');
+    });
+    document.getElementById('holiday-add-btn').addEventListener('click', function(){
+      const dateInput = document.getElementById('holiday-date-input');
+      const labelInput = document.getElementById('holiday-label-input');
+      const date = dateInput.value;
+      if(!date){ toast('يرجى تحديد تاريخ العطلة'); return; }
+      const holidays = loadHolidays();
+      if(holidays.some(h=>h.date===date)){ toast('هذا التاريخ مضاف مسبقاً كعطلة رسمية'); return; }
+      holidays.push({ date, label: labelInput.value.trim() });
+      saveHolidays(holidays);
+      dateInput.value = ''; labelInput.value = '';
+      renderHolidayList();
+      toast('تمت إضافة العطلة الرسمية');
+    });
+  }
+  renderHolidayList();
+}
+
+/* ---- Admin-defined minimum-interval rules between repeated transactions ---- */
+const LS_INTERVAL_RULES = 'sijil_interval_rules_v1';
+
+function loadIntervalRules(){
+  return storage.getJSON(LS_INTERVAL_RULES, []);
+}
+function saveIntervalRules(list){
+  storage.setJSON(LS_INTERVAL_RULES, list);
+}
+// Whole-month difference between two 'yyyy-mm-dd' dates (earlier -> later).
+// A month only counts as "complete" once the later date's day-of-month has
+// reached the earlier date's day-of-month, so e.g. 2026-01-15 -> 2026-07-14
+// is 5 complete months, not 6.
+function monthsBetweenDates(earlier, later){
+  const a = new Date(earlier+'T00:00:00'), b = new Date(later+'T00:00:00');
+  let months = (b.getFullYear()-a.getFullYear())*12 + (b.getMonth()-a.getMonth());
+  if(b.getDate() < a.getDate()) months -= 1;
+  return months;
+}
+// Existing rules (saved before rule kinds existed) have no `kind` field —
+// they were always minimum-interval rules, so default to that for them.
+function ruleKind(rule){ return rule.kind || 'interval'; }
+// 'yyyy-mm-dd' -> 'yyyy-mm', for same-calendar-month comparisons.
+function monthKeyOf(dateStr){ return dateStr.slice(0,7); }
+
+// Returns the violated rule (plus supporting detail) if adding this
+// transaction would breach an admin-defined rule — either a minimum
+// interval since the last matching transaction, or a maximum count of
+// matching transactions within the same calendar month — or null if
+// there's no applicable rule or no violation.
+function findRuleViolation(employeeId, type, subCategory, date, excludeTxId){
+  const rules = loadIntervalRules().filter(r=> r.type===type && (r.subCategory==='' || r.subCategory===subCategory));
+  for(const rule of rules){
+    const matches = transactions.filter(t=>
+      t.id!==excludeTxId && t.employeeId===employeeId && t.type===type &&
+      (rule.subCategory==='' || t.subCategory===rule.subCategory)
+    );
+    if(ruleKind(rule)==='monthlyLimit'){
+      const sameMonthCount = matches.filter(t=> monthKeyOf(t.date)===monthKeyOf(date)).length;
+      if(sameMonthCount >= rule.maxPerMonth){
+        return { rule, sameMonthCount };
+      }
+    } else {
+      const priorMatches = matches.filter(t=> t.date < date).sort((a,b)=> a.date < b.date ? 1 : -1); // most recent first
+      if(priorMatches.length===0) continue;
+      const last = priorMatches[0];
+      const elapsed = monthsBetweenDates(last.date, date);
+      if(elapsed < rule.minMonths){
+        return { rule, lastDate: last.date, elapsed };
+      }
+    }
+  }
+  return null;
+}
+// Shows a confirmable warning for a rule violation. Returns true if the
+// user chooses to proceed anyway, false if they cancel (nothing is saved).
+function confirmRuleOverride(violation, type, subCategory){
+  const typeLabel = TYPE_CONFIG[type].label;
+  const subLabelText = violation.rule.subCategory ? subLabel(type, subCategory) : '';
+  const label = `${typeLabel}${subLabelText ? ' - '+subLabelText : ''}`;
+  const msg = ruleKind(violation.rule)==='monthlyLimit'
+    ? `تنبيه: وفق القاعدة المحددة، لا يجوز تسجيل أكثر من ${violation.rule.maxPerMonth} حركة من نوع "${label}" لهذا الموظف خلال الشهر نفسه (المسجّل حالياً: ${violation.sameMonthCount}).
+
+هل تريد المتابعة وتسجيل الحركة رغم ذلك؟`
+    : `تنبيه: وفق القاعدة المحددة، لا يجوز تسجيل حركة "${label}" لهذا الموظف إلا بعد ${violation.rule.minMonths} أشهر من آخر مرة بتاريخ ${violation.lastDate} (المدة المنقضية: ${violation.elapsed} شهر).
+
+هل تريد المتابعة وتسجيل الحركة رغم ذلك؟`;
+  return confirm(msg);
+}
+
+function fillRuleTypeSelect(){
+  populateSelect(document.getElementById('rule-type'), Object.keys(TYPE_CONFIG), k=>k, k=>TYPE_CONFIG[k].label);
+}
+function updateRuleSubSelect(){
+  const type = document.getElementById('rule-type').value;
+  const cfg = TYPE_CONFIG[type];
+  const subSel = document.getElementById('rule-sub');
+  subSel.innerHTML = '';
+  appendOption(subSel, '', 'أي تصنيف فرعي');
+  populateSelect(subSel, cfg.subs, s=>s.v, s=>s.l, {clear:false});
+}
+function updateRuleKindFields(){
+  const kind = document.getElementById('rule-kind').value;
+  document.getElementById('rule-min-months-field').style.display = kind==='monthlyLimit' ? 'none' : '';
+  document.getElementById('rule-max-per-month-field').style.display = kind==='monthlyLimit' ? '' : 'none';
+}
+function renderRuleList(){
+  const box = document.getElementById('rule-list');
+  const rules = loadIntervalRules();
+  if(rules.length===0){
+    box.innerHTML = '<div class="holiday-list-empty">لم تُضَف أي قاعدة بعد</div>';
+    return;
+  }
+  box.innerHTML = rules.map(r=>{
+    const typeLabel = TYPE_CONFIG[r.type] ? TYPE_CONFIG[r.type].label : r.type;
+    const subText = r.subCategory ? ` — ${subLabel(r.type, r.subCategory)}` : ' — أي تصنيف فرعي';
+    const limitText = ruleKind(r)==='monthlyLimit' ? `الحد الأقصى: ${r.maxPerMonth} مرات/شهر` : `الحد الأدنى: ${r.minMonths} شهر`;
+    return `
+    <span class="holiday-chip">
+      <span class="hc-date">${typeLabel}${subText}</span>
+      <span>${limitText}</span>
+      <button type="button" class="hc-remove" data-id="${r.id}" title="حذف">×</button>
+    </span>`;
+  }).join('');
+  box.querySelectorAll('.hc-remove').forEach(btn=>{
+    btn.addEventListener('click', function(){
+      const id = this.dataset.id;
+      saveIntervalRules(loadIntervalRules().filter(r=>r.id!==id));
+      renderRuleList();
+      toast('تم حذف القاعدة');
+    });
+  });
+}
+function initIntervalRuleSettings(){
+  const typeSel = document.getElementById('rule-type');
+  const kindSel = document.getElementById('rule-kind');
+  if(!typeSel.dataset.bound){
+    typeSel.dataset.bound = '1';
+    fillRuleTypeSelect();
+    updateRuleSubSelect();
+    updateRuleKindFields();
+    typeSel.addEventListener('change', updateRuleSubSelect);
+    kindSel.addEventListener('change', updateRuleKindFields);
+    document.getElementById('rule-add-btn').addEventListener('click', function(){
+      const type = typeSel.value;
+      const subCategory = document.getElementById('rule-sub').value;
+      const kind = kindSel.value;
+      const rules = loadIntervalRules();
+      if(rules.some(r=>r.type===type && r.subCategory===subCategory && ruleKind(r)===kind)){ toast('توجد قاعدة مسجّلة مسبقاً لنفس النوع والتصنيف الفرعي ونوع القاعدة'); return; }
+      if(kind==='monthlyLimit'){
+        const maxRaw = document.getElementById('rule-max-per-month').value;
+        const maxPerMonth = Number(maxRaw);
+        if(!maxRaw || maxPerMonth <= 0){ toast('يرجى إدخال حد أقصى صحيح للعدد في الشهر'); return; }
+        rules.push({ id: uid('rule'), type, subCategory, kind, maxPerMonth });
+        document.getElementById('rule-max-per-month').value = '';
+      } else {
+        const minMonthsRaw = document.getElementById('rule-min-months').value;
+        const minMonths = Number(minMonthsRaw);
+        if(!minMonthsRaw || minMonths <= 0){ toast('يرجى إدخال حد أدنى صحيح بالأشهر'); return; }
+        rules.push({ id: uid('rule'), type, subCategory, kind, minMonths });
+        document.getElementById('rule-min-months').value = '';
+      }
+      saveIntervalRules(rules);
+      renderRuleList();
+      toast('تمت إضافة القاعدة');
+    });
+  }
+  renderRuleList();
+}
+
+/* ---- Temporary shift-time overrides (date range + optional employee subset) ---- */
+const LS_SCHEDULE_OVERRIDES = 'sijil_schedule_overrides_v1';
+function loadScheduleOverrides(){ return storage.getJSON(LS_SCHEDULE_OVERRIDES, []); }
+function saveScheduleOverrides(list){ storage.setJSON(LS_SCHEDULE_OVERRIDES, list); }
+// Returns the applicable override (if any) for this employee on this date —
+// only considered for days that are already an enabled workday in the
+// employee's base schedule, so overrides change hours, never off-days.
+// If more than one override matches, the most recently created one wins.
+function getActiveScheduleOverride(empId, dateStr){
+  const matches = loadScheduleOverrides().filter(o=>
+    dateStr >= o.from && dateStr <= o.to && (o.empIds==='all' || o.empIds.includes(empId))
+  );
+  if(matches.length===0) return null;
+  matches.sort((a,b)=> (b.createdAt||0) - (a.createdAt||0));
+  return matches[0];
+}
+function fillScheduleOverrideEmpList(){
+  const box = document.getElementById('sched-ovr-emp-list');
+  const allChecked = document.getElementById('sched-ovr-all-emps').checked;
+  if(employees.length===0){ box.innerHTML = '<div class="holiday-list-empty">لا يوجد موظفون مضافون</div>'; return; }
+  const sorted = employees.slice().sort((a,b)=>a.name.localeCompare(b.name,'ar'));
+  box.innerHTML = sorted.map(e=>`
+    <label class="checkbox-row" style="display:flex;align-items:center;gap:8px;margin:4px 0;">
+      <input type="checkbox" class="sched-ovr-emp-check" value="${e.id}" ${allChecked ? 'checked disabled' : ''}>
+      <span>${e.name} (${e.code})</span>
+    </label>`).join('');
+}
+function renderScheduleOverrideList(){
+  const box = document.getElementById('sched-ovr-list');
+  const overrides = loadScheduleOverrides().slice().sort((a,b)=> a.from < b.from ? -1 : 1);
+  if(overrides.length===0){
+    box.innerHTML = '<div class="holiday-list-empty">لا توجد تعديلات مؤقتة مسجّلة</div>';
+    return;
+  }
+  const today = todayStr();
+  box.innerHTML = overrides.map(o=>{
+    const empNames = o.empIds==='all' ? null : o.empIds.map(id=>{ const e = employees.find(x=>x.id===id); return e ? e.name : null; }).filter(Boolean);
+    const empText = o.empIds==='all' ? 'جميع الموظفين' : (empNames.length ? empNames.join('، ') : `${o.empIds.length} موظف`);
+    const statusBadge = today > o.to ? '<span class="badge no">منتهي</span>' : (today < o.from ? '<span class="badge neu">مجدول</span>' : '<span class="badge ok">نشط الآن</span>');
+    return `
+    <span class="holiday-chip">
+      <span class="hc-date">${o.from} ← ${o.to}</span>
+      <span>${o.start} – ${o.end}</span>
+      <span>${empText}</span>
+      ${statusBadge}
+      <button type="button" class="hc-remove" data-id="${o.id}" title="حذف">×</button>
+    </span>`;
+  }).join('');
+  box.querySelectorAll('.hc-remove').forEach(btn=>{
+    btn.addEventListener('click', function(){
+      const id = this.dataset.id;
+      saveScheduleOverrides(loadScheduleOverrides().filter(o=>o.id!==id));
+      renderScheduleOverrideList();
+      toast('تم حذف التعديل المؤقت — سيعتمد جدول الدوام على إعداده الأساسي لهذه الفترة');
+    });
+  });
+}
+function initScheduleOverrideSettings(){
+  const addBtn = document.getElementById('sched-ovr-add-btn');
+  if(!addBtn.dataset.bound){
+    addBtn.dataset.bound = '1';
+    document.getElementById('sched-ovr-all-emps').addEventListener('change', function(){
+      const checked = this.checked;
+      document.querySelectorAll('.sched-ovr-emp-check').forEach(cb=>{ cb.checked = checked; cb.disabled = checked; });
+    });
+    addBtn.addEventListener('click', function(){
+      const from = document.getElementById('sched-ovr-from').value;
+      const to = document.getElementById('sched-ovr-to').value;
+      const start = document.getElementById('sched-ovr-start').value;
+      const end = document.getElementById('sched-ovr-end').value;
+      if(!from || !to){ toast('يرجى تحديد نطاق التاريخ (من - إلى)'); return; }
+      if(from > to){ toast('تاريخ «من» يجب أن يسبق أو يساوي تاريخ «إلى»'); return; }
+      if(!start || !end){ toast('يرجى تحديد وقت بداية ونهاية الدوام الجديد'); return; }
+      if(timeDiffMinutes(start, end) <= 0){ toast('وقت نهاية الدوام يجب أن يكون بعد وقت البداية'); return; }
+      const allChecked = document.getElementById('sched-ovr-all-emps').checked;
+      let empIds;
+      if(allChecked){
+        empIds = 'all';
+      } else {
+        empIds = Array.from(document.querySelectorAll('.sched-ovr-emp-check:checked')).map(cb=>cb.value);
+        if(empIds.length===0){ toast('يرجى تحديد موظف واحد على الأقل، أو اختيار «تطبيق على جميع الموظفين»'); return; }
+      }
+      const overrides = loadScheduleOverrides();
+      overrides.push({ id: uid('schedovr'), from, to, start, end, empIds, createdAt: Date.now() });
+      saveScheduleOverrides(overrides);
+      document.getElementById('sched-ovr-from').value = '';
+      document.getElementById('sched-ovr-to').value = '';
+      document.getElementById('sched-ovr-start').value = '';
+      document.getElementById('sched-ovr-end').value = '';
+      document.getElementById('sched-ovr-all-emps').checked = false;
+      fillScheduleOverrideEmpList();
+      renderScheduleOverrideList();
+      toast('تم تسجيل التعديل المؤقت لوقت الدوام — سيُطبَّق تلقائياً خلال النطاق المحدد، ثم يعود الجدول إلى إعداده الأساسي بعد تاريخ الانتهاء');
+    });
+  }
+  fillScheduleOverrideEmpList();
+  renderScheduleOverrideList();
+}
+
+/* ---- PDF export (per-employee aggregated professional report) ---- */
+// Builds day-by-day rows for the PDF's tabular daily log (distinct from the
+// per-transaction flattened Excel rows), covering every calendar day in range.
+function buildDailyLog(empId, from, to){
+  const emp = employees.find(e=>e.id===empId);
+  const ledger = computeEmployeeLedger(empId);
+  const byDate = {};
+  ledger.txs.forEach(t=>{ byDate[t.date] = byDate[t.date] || []; byDate[t.date].push(t); });
+
+  const rows = [];
+  forEachDateInRange(from, to, d=>{
+    const iso = d.toISOString().slice(0,10);
+    const dow = d.getDay();
+    const dayTx = byDate[iso] || [];
+    const att = {}; dayTx.filter(t=>t.type==='attendance').forEach(t=>att[t.subCategory]=t.value);
+    const others = dayTx.filter(t=>t.type!=='attendance')
+      .map(t=>`${TYPE_CONFIG[t.type].label}: ${subLabel(t.type,t.subCategory)} (${formatValue(t)})`)
+      .join('، ');
+    rows.push({
+      date: iso, dow: DAY_NAMES[dow],
+      target: getDayTargetHours(emp, dow, iso),
+      checkIn: att.in || '', checkOut: att.out || '',
+      worked: computeWorkedHours(att.in, att.out),
+      notes: others
+    });
+  });
+  return rows;
+}
+
+function computeAggregateSummary(empId, from, to){
+  const ledger = computeEmployeeLedger(empId);
+  const inRange = ledger.txs.filter(t=>t.date>=from && t.date<=to);
+  const sumBy = (type, sub) => inRange.filter(t=>t.type===type && (!sub || t.subCategory===sub)).reduce((s,t)=>s+Number(t.value),0);
+  const countBy = (type, sub) => inRange.filter(t=>t.type===type && (!sub || t.subCategory===sub)).length;
+  const workedDays = new Set(inRange.filter(t=>t.type==='attendance' && t.subCategory==='in').map(t=>t.date)).size;
+  const issuedInRange = inRange.filter(t=>t.type==='loan' && t.subCategory==='issue').reduce((s,t)=>s+Number(t.value),0);
+  const repaidInRange = inRange.filter(t=>t.type==='loan' && t.subCategory==='repay').reduce((s,t)=>s+Number(t.value),0);
+  // Standing balance as of the end of the selected range (last tx on/before `to`)
+  const upToRange = ledger.txs.filter(t=>t.date<=to);
+  const endBalance = upToRange.length ? ledger.balanceById[upToRange[upToRange.length-1].id] : 0;
+  return {
+    workedDays,
+    tardinessApproved: sumBy('tardiness','approved'), tardinessUnapproved: sumBy('tardiness','unapproved'),
+    overtimeApproved: sumBy('overtime','approved'), overtimeUnapproved: sumBy('overtime','unapproved'),
+    earlyApproved: sumBy('early_departure','approved'), earlyUnapproved: sumBy('early_departure','unapproved'),
+    absenceApproved: sumBy('absence','approved'), absenceUnapproved: sumBy('absence','unapproved'),
+    leaveAnnual: sumBy('leave','annual'), leaveCasual: sumBy('leave','casual'), leaveSick: sumBy('leave','sick'), leaveUnpaid: sumBy('leave','unpaid'),
+    payrollAdvanceCount: countBy('payroll','advance'), payrollAdvanceTotal: sumBy('payroll','advance'),
+    payrollSettlementCount: countBy('payroll','settlement'), payrollSettlementTotal: sumBy('payroll','settlement'),
+    issuedInRange, repaidInRange, endBalance
+  };
+}
+
+// Attendance-commitment rate: a single company-wide (or selection-wide)
+// aggregate figure, not one row per employee — matches the organization's
+// standard weekly "حساب نسبة التزام الموظفين بالدوام الرسمي" report.
+// Actual attendance hours are the total scheduled (target) hours for the
+// selected employees minus ALL logged tardiness (approved and unapproved
+// alike, since a late arrival shortens the actual clocked time regardless
+// of whether it was excused) — the remainder as a percentage of target is
+// the commitment rate. Approved/unapproved are then reported separately as
+// a percentage of target too, purely to show how much of the shortfall was
+// excused. Early departure is intentionally not part of this particular
+// report (it isn't part of the source template), unlike the per-employee
+// PDF report elsewhere in this file, which does track it separately.
+const ARABIC_MONTHS = ['يناير','فبراير','مارس','ابريل','مايو','يونيو','يوليو','اغسطس','سبتمبر','اكتوبر','نوفمبر','ديسمبر'];
+function formatArabicDayMonth(dateStr){
+  const [y,m,d] = dateStr.split('-').map(Number);
+  return `${String(d).padStart(2,'0')} ${ARABIC_MONTHS[m-1]}`;
+}
+function formatArabicDateRangeHeader(from, to){
+  const fy = Number(from.split('-')[0]), ty = Number(to.split('-')[0]);
+  const fromLabel = formatArabicDayMonth(from);
+  const toLabel = `${formatArabicDayMonth(to)} ${ty}م`;
+  return fy!==ty ? `${fromLabel} ${fy}م – ${toLabel}` : `${fromLabel} – ${toLabel}`;
+}
+function formatDMY(dateStr){
+  const [y,m,d] = dateStr.split('-');
+  return `${d}-${m}-${y}م.`;
+}
+function formatDMYRange(fromStr, toStr){
+  if(fromStr===toStr) return formatDMY(fromStr);
+  const [fy,fm,fd] = fromStr.split('-');
+  const [ty,tm,td] = toStr.split('-');
+  if(fy===ty && fm===tm) return `${fd}-${td}-${fm}-${fy}م.`;
+  return `${formatDMY(fromStr)} – ${formatDMY(toStr)}`;
+}
+function arMinutesLabel(mins){
+  const n = Math.round(mins);
+  if(n===1) return 'دقيقة واحدة';
+  if(n===2) return 'دقيقتان';
+  if(n>=3 && n<=10) return `${n} دقائق`;
+  return `${n} دقيقة`;
+}
+// Merges a sorted list of ISO date strings into contiguous ranges, allowing
+// a gap of up to 2 calendar days so a single rest day (e.g. Friday) in the
+// middle of a leave period doesn't split it into two separate rows.
+function groupConsecutiveDates(sortedDates){
+  if(sortedDates.length===0) return [];
+  const ranges = [];
+  let start = sortedDates[0], prev = sortedDates[0];
+  for(let i=1;i<sortedDates.length;i++){
+    const cur = sortedDates[i];
+    const gapDays = Math.round((new Date(cur+'T00:00:00') - new Date(prev+'T00:00:00'))/86400000);
+    if(gapDays<=2){ prev = cur; }
+    else { ranges.push({from:start,to:prev}); start = cur; prev = cur; }
+  }
+  ranges.push({from:start,to:prev});
+  return ranges;
+}
+const LEAVE_ROW_LABELS = {
+  'absence|approved':'غياب بإذن', 'absence|unapproved':'غياب بدون إذن',
+  'leave|annual':'إجازة سنوية', 'leave|casual':'إجازة اضطرارية',
+  'leave|sick':'إجازة مرضية', 'leave|unpaid':'إجازة بدون مرتب'
+};
+function computeTotalTargetHours(emp, from, to){
+  let total = 0;
+  forEachDateInRange(from, to, d=>{
+    total += getDayTargetHours(emp, d.getDay(), toLocalISODate(d));
+  });
+  return total;
+}
+function computeCommitmentReportData(emps, from, to){
+  let totalTargetHours = 0, tardApprovedHours = 0, tardUnapprovedHours = 0;
+  const tardinessRows = [];
+  const leaveRows = [];
+  emps.forEach(emp=>{
+    totalTargetHours += computeTotalTargetHours(emp, from, to);
+    const empTx = transactions.filter(t=>t.employeeId===emp.id && t.date>=from && t.date<=to);
+    empTx.filter(t=>t.type==='tardiness').forEach(t=>{
+      const hrs = Number(t.value)||0;
+      if(t.subCategory==='approved') tardApprovedHours += hrs; else tardUnapprovedHours += hrs;
+      tardinessRows.push({ name: emp.name, minutes: Math.round(hrs*60), date: t.date });
+    });
+    ['absence','leave'].forEach(type=>{
+      const subs = type==='absence' ? ['approved','unapproved'] : ['annual','casual','sick','unpaid'];
+      subs.forEach(sub=>{
+        const dates = empTx.filter(t=>t.type===type && t.subCategory===sub).map(t=>t.date).sort();
+        groupConsecutiveDates(dates).forEach(r=>{
+          leaveRows.push({ name: emp.name, label: LEAVE_ROW_LABELS[`${type}|${sub}`], note: formatDMYRange(r.from, r.to), sortDate: r.from });
+        });
+      });
+    });
+  });
+  const tardinessTotalHours = tardApprovedHours + tardUnapprovedHours;
+  const actualHours = Math.max(0, totalTargetHours - tardinessTotalHours);
+  const pct = h => totalTargetHours>0 ? (h/totalTargetHours*100) : 0;
+  tardinessRows.sort((a,b)=> a.date.localeCompare(b.date));
+  leaveRows.sort((a,b)=> a.sortDate.localeCompare(b.sortDate));
+  return {
+    totalTargetHours, actualHours,
+    commitmentPct: pct(actualHours),
+    tardinessPct: pct(tardinessTotalHours),
+    tardApprovedPct: pct(tardApprovedHours),
+    tardUnapprovedPct: pct(tardUnapprovedHours),
+    tardinessRows, leaveRows
+  };
+}
+
+let lastBulkReportData = null;
+
+function renderBulkEmpPicker(){
+  const box = document.getElementById('bulk-emp-picker');
+  if(employees.length===0){
+    box.innerHTML = '<div class="holiday-list-empty">لا يوجد موظفون بعد</div>';
+    return;
+  }
+  box.innerHTML = employees.map(e=>`
+    <label><input type="checkbox" class="bulk-emp-cb" value="${e.id}" checked> ${e.name}</label>
+  `).join('');
+}
+
+function bulkSummaryHtml(data, from, to){
+  return `
+    <div class="pdf-info-table">
+      <div class="pdf-info-row"><div class="pdf-info-cell lbl">عدد ساعات العمل</div><div class="pdf-info-cell val">7 ساعات</div></div>
+      <div class="pdf-info-row"><div class="pdf-info-cell lbl">عدد الأيام</div><div class="pdf-info-cell val">6 أيام من السبت الى الخميس</div></div>
+      <div class="pdf-info-row"><div class="pdf-info-cell lbl">التاريخ</div><div class="pdf-info-cell val">${formatArabicDateRangeHeader(from, to)}</div></div>
+      <div class="pdf-info-row"><div class="pdf-info-cell lbl">إجمالي عدد ساعات الحضور الفعلية خلال الفترة</div><div class="pdf-info-cell val">${data.actualHours.toFixed(1)} ساعة</div></div>
+      <div class="pdf-info-row"><div class="pdf-info-cell lbl">إجمالي ساعات الدوام الرسمي للفترة</div><div class="pdf-info-cell val">${data.totalTargetHours.toFixed(1)} ساعة</div></div>
+      <div class="pdf-info-row">
+        <div class="pdf-commit-block" style="flex:1 1 100%;">
+          <div class="pdf-commit-formula">نسبة الالتزام = ${data.actualHours.toFixed(1)} ÷ ${data.totalTargetHours.toFixed(1)} × 100% = ${data.commitmentPct.toFixed(2)}%</div>
+          <div class="pdf-commit-sub">
+            تأخيرات: ${data.tardinessPct.toFixed(2)}%<br>
+            تأخير بإذن: ${data.tardApprovedPct.toFixed(2)}%<br>
+            تأخير من غير إذن: ${data.tardUnapprovedPct.toFixed(2)}%
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderBulkReportOnScreen(data, from, to){
+  document.getElementById('bulk-summary').innerHTML = bulkSummaryHtml(data, from, to);
+
+  const tTitle = document.getElementById('bulk-tardiness-title');
+  const tWrap = document.getElementById('bulk-tardiness-wrap');
+  if(data.tardinessRows.length===0){
+    tTitle.style.display = 'none'; tWrap.style.display = 'none';
+  }else{
+    tTitle.style.display = ''; tWrap.style.display = '';
+    document.getElementById('bulk-tardiness-tbody').innerHTML = data.tardinessRows.map(r=>`
+      <tr><td>${r.name}</td><td class="num">${arMinutesLabel(r.minutes)}</td><td class="num">${formatDMY(r.date)}</td></tr>
+    `).join('');
+  }
+
+  const lTitle = document.getElementById('bulk-leave-title');
+  const lWrap = document.getElementById('bulk-leave-wrap');
+  if(data.leaveRows.length===0){
+    lTitle.style.display = 'none'; lWrap.style.display = 'none';
+  }else{
+    lTitle.style.display = ''; lWrap.style.display = '';
+    document.getElementById('bulk-leave-tbody').innerHTML = data.leaveRows.map(r=>`
+      <tr><td>${r.name}</td><td>${r.label}</td><td>${r.note}</td></tr>
+    `).join('');
+  }
+}
+
+function buildBulkCommitmentPdfPage(data, from, to){
+  const orgName = localStorage.getItem(LS_ORG_NAME) || 'المؤسسة';
+  const logo = localStorage.getItem(LS_ORG_LOGO);
+  const issueDate = todayStr();
+  const tardinessSection = data.tardinessRows.length===0 ? '' : `
+    <div class="pdf-section-title">التأخيرات</div>
+    <div class="pdf-list-table">
+      <div class="pdf-list-row header">
+        <div class="pdf-list-cell c-t-name">الاسم</div>
+        <div class="pdf-list-cell c-t-minutes">إجمالي التأخير</div>
+        <div class="pdf-list-cell c-t-date">التاريخ</div>
+      </div>
+      ${data.tardinessRows.map(r=>`
+      <div class="pdf-list-row">
+        <div class="pdf-list-cell c-t-name">${r.name}</div>
+        <div class="pdf-list-cell c-t-minutes">${arMinutesLabel(r.minutes)}</div>
+        <div class="pdf-list-cell c-t-date">${formatDMY(r.date)}</div>
+      </div>`).join('')}
+    </div>`;
+  const leaveSection = data.leaveRows.length===0 ? '' : `
+    <div class="pdf-section-title">الإجازات والغياب</div>
+    <div class="pdf-list-table">
+      <div class="pdf-list-row header">
+        <div class="pdf-list-cell c-l-name">الاسم</div>
+        <div class="pdf-list-cell c-l-type">نوع الإجازة</div>
+        <div class="pdf-list-cell c-l-note">ملاحظة</div>
+      </div>
+      ${data.leaveRows.map(r=>`
+      <div class="pdf-list-row">
+        <div class="pdf-list-cell c-l-name">${r.name}</div>
+        <div class="pdf-list-cell c-l-type">${r.label}</div>
+        <div class="pdf-list-cell c-l-note">${r.note}</div>
+      </div>`).join('')}
+    </div>`;
+  return `
+  <div class="pdf-page-flow">
+    <div class="pdf-header">
+      <div class="pdf-brand">
+        ${logo ? `<img class="pdf-logo" src="${logo}">` : `<div class="pdf-logo">سجل</div>`}
+        <div class="pdf-org">${orgName}<div class="sub">نظام سِجِلّ لإدارة الحضور والانصراف</div></div>
+      </div>
+      <div class="pdf-meta">تاريخ الإصدار: ${issueDate}<br>النطاق: ${from} إلى ${to}</div>
+    </div>
+    <div class="pdf-title-center">حساب نسبة التزام الموظفين بالدوام الرسمي</div>
+    <div class="pdf-subtitle-center">خلال الفترة المحددة</div>
+    ${bulkSummaryHtml(data, from, to)}
+    ${tardinessSection}
+    ${leaveSection}
+    <div class="pdf-footer">صدر هذا التقرير آلياً من نظام سِجِلّ لإدارة الحضور والانصراف — ${issueDate}</div>
+  </div>`;
+}
+
+function initBulkCommitmentReport(){
+  const genBtn = document.getElementById('bulk-generate-btn');
+  if(genBtn.dataset.bound) { renderBulkEmpPicker(); return; }
+  genBtn.dataset.bound = '1';
+  renderBulkEmpPicker();
+
+  document.getElementById('bulk-emp-select-all').addEventListener('change', function(){
+    document.querySelectorAll('.bulk-emp-cb').forEach(cb=> cb.checked = this.checked);
+  });
+
+  genBtn.addEventListener('click', function(){
+    const from = document.getElementById('bulk-from').value;
+    const to = document.getElementById('bulk-to').value;
+    if(!from || !to){ toast('يرجى تحديد نطاق التاريخ (من - إلى)'); return; }
+    if(from > to){ toast('تاريخ «من» يجب أن يسبق تاريخ «إلى»'); return; }
+    const selectedIds = Array.from(document.querySelectorAll('.bulk-emp-cb:checked')).map(cb=>cb.value);
+    if(selectedIds.length===0){ toast('يرجى اختيار موظف واحد على الأقل'); return; }
+    const emps = selectedIds.map(id => employees.find(e=>e.id===id)).filter(Boolean);
+    lastBulkReportData = computeCommitmentReportData(emps, from, to);
+    renderBulkReportOnScreen(lastBulkReportData, from, to);
+    document.getElementById('bulk-export-pdf-btn').disabled = false;
+    toast(`تم إنشاء التقرير لـ ${emps.length} موظف`);
+  });
+
+  document.getElementById('bulk-export-pdf-btn').addEventListener('click', async function(){
+    if(!lastBulkReportData){ toast('لا توجد بيانات للتصدير — أنشئ التقرير أولاً'); return; }
+    const from = document.getElementById('bulk-from').value;
+    const to = document.getElementById('bulk-to').value;
+    this.disabled = true; const originalLabel = this.textContent; this.textContent = 'جارٍ إنشاء الملف...';
+    const root = document.getElementById('pdf-render-root');
+    try{
+      root.innerHTML = buildBulkCommitmentPdfPage(lastBulkReportData, from, to);
+      if(document.fonts && document.fonts.ready) await document.fonts.ready;
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF('p','pt','a4');
+      const pages = root.querySelectorAll('.pdf-page-flow');
+      for(let i=0; i<pages.length; i++){
+        await addPageAsImage(doc, pages[i], i===0);
+      }
+      doc.save(`تقرير_نسبة_الالتزام_${from}_الى_${to}.pdf`);
+      toast('تم إنشاء ملف PDF بنجاح');
+    }catch(err){
+      toast('تعذّر إنشاء ملف PDF — حاول مرة أخرى');
+    }finally{
+      root.innerHTML = '';
+      this.disabled = false; this.textContent = originalLabel;
+    }
+  });
+}
+
+function buildPdfEmployeeSection(empId, from, to){
+  const emp = employees.find(e=>e.id===empId);
+  const s = computeAggregateSummary(empId, from, to);
+  const leaveBal = computeLeaveEntitlement(empId, to);
+  const orgName = localStorage.getItem(LS_ORG_NAME) || 'المؤسسة';
+  const logo = localStorage.getItem(LS_ORG_LOGO);
+  const issueDate = todayStr();
+
+  return `
+  <div class="pdf-page">
+    <div class="pdf-header">
+      <div class="pdf-brand">
+        ${logo ? `<img class="pdf-logo" src="${logo}">` : `<div class="pdf-logo">سجل</div>`}
+        <div class="pdf-org">${orgName}<div class="sub">نظام سِجِلّ لإدارة الحضور والانصراف</div></div>
+      </div>
+      <div class="pdf-meta">تاريخ الإصدار: ${issueDate}<br>النطاق: ${from} إلى ${to}</div>
+    </div>
+    <div class="pdf-title">تقرير الحضور والانصراف الشامل</div>
+    <div class="pdf-range">تقرير مجمّع للفترة من ${from} إلى ${to}</div>
+
+    <div class="pdf-profile">
+      <div><b>${emp.name}</b>الرقم الوظيفي: ${emp.code}</div>
+      <div><b>${emp.dept || '—'}</b>القسم</div>
+      <div><b>${emp.hire || '—'}</b>تاريخ التعيين</div>
+      <div><b>${weeklyTotalHours(emp).toFixed(1)} س/أسبوعياً</b>إجمالي ساعات الدوام الرسمية</div>
+    </div>
+
+    <div class="pdf-section-title">الملخص الإحصائي التراكمي للفترة</div>
+    <div class="pdf-summary-block">
+      <div class="pdf-summary-row">
+        <div class="pdf-summary-cell"><span class="lbl">أيام العمل الفعلي</span><span class="val">${s.workedDays} يوم</span></div>
+        <div class="pdf-summary-cell"><span class="lbl">تأخير معتمد (ساعة)</span><span class="val">${s.tardinessApproved.toFixed(1)}</span></div>
+      </div>
+      <div class="pdf-summary-row">
+        <div class="pdf-summary-cell"><span class="lbl">تأخير غير معتمد (ساعة)</span><span class="val">${s.tardinessUnapproved.toFixed(1)}</span></div>
+        <div class="pdf-summary-cell"><span class="lbl">إضافي معتمد (ساعة)</span><span class="val">${s.overtimeApproved.toFixed(1)}</span></div>
+      </div>
+      <div class="pdf-summary-row">
+        <div class="pdf-summary-cell"><span class="lbl">إضافي غير معتمد (ساعة)</span><span class="val">${s.overtimeUnapproved.toFixed(1)}</span></div>
+        <div class="pdf-summary-cell"><span class="lbl">خروج مبكر معتمد (ساعة)</span><span class="val">${s.earlyApproved.toFixed(1)}</span></div>
+      </div>
+      <div class="pdf-summary-row">
+        <div class="pdf-summary-cell"><span class="lbl">خروج مبكر غير معتمد (ساعة)</span><span class="val">${s.earlyUnapproved.toFixed(1)}</span></div>
+        <div class="pdf-summary-cell"><span class="lbl">غياب معتمد (يوم)</span><span class="val">${s.absenceApproved.toFixed(1)}</span></div>
+      </div>
+      <div class="pdf-summary-row">
+        <div class="pdf-summary-cell"><span class="lbl">غياب غير معتمد (يوم)</span><span class="val">${s.absenceUnapproved.toFixed(1)}</span></div>
+        <div class="pdf-summary-cell"><span class="lbl">الإجازات السنوية (يوم)</span><span class="val">${s.leaveAnnual}</span></div>
+      </div>
+      <div class="pdf-summary-row">
+        <div class="pdf-summary-cell"><span class="lbl">الإجازات الطارئة (يوم)</span><span class="val">${s.leaveCasual}</span></div>
+        <div class="pdf-summary-cell"><span class="lbl">الإجازات المرضية (يوم)</span><span class="val">${s.leaveSick}</span></div>
+      </div>
+      <div class="pdf-summary-row">
+        <div class="pdf-summary-cell"><span class="lbl">إجازة بدون مرتب (يوم)</span><span class="val">${s.leaveUnpaid}</span></div>
+        <div class="pdf-summary-cell"><span class="lbl">إجمالي السلف المستلمة (خلال الفترة)</span><span class="val">${s.issuedInRange.toFixed(2)} د.ل</span></div>
+      </div>
+      <div class="pdf-summary-row">
+        <div class="pdf-summary-cell"><span class="lbl">إجمالي السلف المسددة (خلال الفترة)</span><span class="val">${s.repaidInRange.toFixed(2)} د.ل</span></div>
+        <div class="pdf-summary-cell"><span class="lbl">عدد مرات صرف دفعة من الراتب</span><span class="val">${s.payrollAdvanceCount}</span></div>
+      </div>
+      <div class="pdf-summary-row">
+        <div class="pdf-summary-cell"><span class="lbl">إجمالي الدفعات المصروفة من الراتب</span><span class="val">${s.payrollAdvanceTotal.toFixed(2)} د.ل</span></div>
+        <div class="pdf-summary-cell"><span class="lbl">عدد مرات تسوية الراتب كاملاً</span><span class="val">${s.payrollSettlementCount}</span></div>
+      </div>
+      <div class="pdf-summary-row">
+        <div class="pdf-summary-cell"><span class="lbl">إجمالي قيمة تسويات الراتب الكاملة</span><span class="val">${s.payrollSettlementTotal.toFixed(2)} د.ل</span></div>
+      </div>
+    </div>
+
+    <div class="pdf-section-title">خلاصة رصيد الإجازات السنوية (حتى ${to})</div>
+    <div class="pdf-summary-block">
+      <div class="pdf-summary-row">
+        <div class="pdf-summary-cell"><span class="lbl">الرصيد السنوي المستحق تناسبياً</span><span class="val">${leaveBal.accrued.toFixed(1)} يوم</span></div>
+        <div class="pdf-summary-cell"><span class="lbl">المستهلك من الرصيد</span><span class="val">${leaveBal.consumed.toFixed(1)} يوم</span></div>
+      </div>
+      <div class="pdf-summary-row total">
+        <div class="pdf-summary-cell"><span class="lbl">الرصيد المتبقي الحالي من الإجازات</span><span class="val gold">${leaveBal.remaining.toFixed(1)} يوم</span></div>
+        <div class="pdf-summary-cell"><span class="lbl">الرصيد النهائي المتبقي من السلف (حتى ${to})</span><span class="val gold">${s.endBalance.toFixed(2)} د.ل</span></div>
+      </div>
+    </div>
+
+    <div class="pdf-footer">صدر هذا التقرير آلياً من نظام سِجِلّ لإدارة الحضور والانصراف — ${issueDate}</div>
+  </div>`;
+}
+
+// Renders one .pdf-page element to a pure raster PNG via html2canvas, then
+// embeds it into the jsPDF document as an image (never as jsPDF's own
+// text-drawing layer). This is the important part: jsPDF's built-in
+// doc.html() convenience method also lays down its own selectable-text
+// layer using the standard 14 PDF fonts, which have no Arabic glyphs —
+// that produced mojibake even though the visual raster looked fine.
+// Going through html2canvas -> addImage() ourselves guarantees the PDF
+// contains nothing but the correctly-shaped Arabic pixels html2canvas
+// captured from the real browser-rendered DOM.
+async function addPageAsImage(doc, pageEl, isFirstPage){
+  const PAGE_W_PT = 595.28, PAGE_H_PT = 841.89; // A4 in points — must match the jsPDF('a4') doc exactly.
+  // Capture EXACTLY the page element's own box (width/height/windowWidth/
+  // windowHeight all pinned to its CSS size) rather than letting
+  // html2canvas fall back to the content's natural scroll size. Some
+  // html2canvas versions do not fully respect `overflow:hidden` on the
+  // captured root and will rasterize any overflowing content anyway —
+  // pinning the capture dimensions here is what actually guarantees the
+  // output can never exceed one true A4 page, regardless of that.
+  const pageWidthPx = pageEl.offsetWidth;
+  const pageHeightPx = pageEl.offsetHeight;
+  const canvas = await html2canvas(pageEl, {
+    scale: 2, useCORS: true, backgroundColor: '#ffffff',
+    width: pageWidthPx, height: pageHeightPx,
+    windowWidth: pageWidthPx, windowHeight: pageHeightPx
+  });
+  const imgWidthPt = PAGE_W_PT;
+  const pxToPt = imgWidthPt / canvas.width;
+  const fullHeightPt = canvas.height * pxToPt;
+
+  if(fullHeightPt <= PAGE_H_PT){
+    if(!isFirstPage) doc.addPage();
+    doc.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, imgWidthPt, fullHeightPt);
+    return;
+  }
+  // Content taller than one A4 page (e.g. a long daily log) — slice the
+  // rasterized canvas into page-sized chunks so nothing gets cut mid-row.
+  const sliceTargetHeightPx = PAGE_H_PT / pxToPt;
+  let renderedPx = 0, first = true;
+  while(renderedPx < canvas.height){
+    let sliceHeightPx = Math.min(sliceTargetHeightPx, canvas.height - renderedPx);
+    // Guard against a degenerate near-zero-height final slice: sub-pixel
+    // rounding from the scale-2 canvas conversion can leave a sliver of
+    // under ~1px for the last page. A canvas that thin rasterizes to an
+    // effectively empty/invalid PNG, which crashes jsPDF's addImage() and
+    // aborts the whole export — so fold any such sliver into this slice
+    // instead of spawning a near-blank extra page for it.
+    const remainderPx = canvas.height - (renderedPx + sliceHeightPx);
+    if(remainderPx > 0 && remainderPx < 2) sliceHeightPx += remainderPx;
+    sliceHeightPx = Math.round(sliceHeightPx);
+    const sliceCanvas = document.createElement('canvas');
+    sliceCanvas.width = canvas.width;
+    sliceCanvas.height = sliceHeightPx;
+    sliceCanvas.getContext('2d').drawImage(
+      canvas, 0, renderedPx, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx
+    );
+    if(!(isFirstPage && first)) doc.addPage();
+    doc.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', 0, 0, imgWidthPt, sliceHeightPx*pxToPt);
+    renderedPx += sliceHeightPx;
+    first = false;
+  }
+}
+
+document.getElementById('rep-export-pdf').addEventListener('click', async function(){
+  if(lastReportRows.length===0){ toast('لا توجد بيانات للتصدير'); return; }
+  const from = document.getElementById('rep-from').value;
+  const to = document.getElementById('rep-to').value;
+  const targetIds = Array.from(document.querySelectorAll('.rep-pdf-emp-cb:checked')).map(cb=>cb.value);
+  if(targetIds.length===0){ toast('يرجى اختيار موظف واحد على الأقل من قائمة موظفي تقرير PDF'); return; }
+
+  this.disabled = true; const originalLabel = this.textContent; this.textContent = 'جارٍ إنشاء الملف...';
+  const root = document.getElementById('pdf-render-root');
+  try{
+    root.innerHTML = targetIds.map(id=>buildPdfEmployeeSection(id, from, to)).join('');
+    if(document.fonts && document.fonts.ready) await document.fonts.ready;
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('p','pt','a4');
+    const pages = root.querySelectorAll('.pdf-page');
+    for(let i=0; i<pages.length; i++){
+      await addPageAsImage(doc, pages[i], i===0);
+    }
+    const fname = `تقرير_PDF_${from}_الى_${to}.pdf`;
+    doc.save(fname);
+    toast('تم إنشاء ملف PDF بنجاح');
+  }catch(err){
+    toast('تعذّر إنشاء ملف PDF — حاول مرة أخرى');
+  }finally{
+    root.innerHTML = '';
+    this.disabled = false; this.textContent = originalLabel;
+  }
+});
+
+/* ======================= DATA IMPORTER MODULE ======================= */
+const IMPORT_HEADER_MAP = {
+  'كود الموظف':'code', 'رمز الموظف':'code', 'الرقم الوظيفي':'code', 'employee code':'code', 'code':'code', 'id':'code',
+  'التاريخ':'date', 'تاريخ':'date', 'date':'date',
+  'وقت الحضور':'in', 'حضور':'in', 'check in':'in', 'checkin':'in', 'in':'in', 'time in':'in',
+  'وقت الانصراف':'out', 'انصراف':'out', 'check out':'out', 'checkout':'out', 'out':'out', 'time out':'out',
+  'ملاحظات':'notes', 'ملاحظة':'notes', 'notes':'notes', 'remarks':'notes'
+};
+
+function normalizeImportRow(rawRow){
+  const obj = {};
+  Object.keys(rawRow).forEach(h=>{
+    const key = IMPORT_HEADER_MAP[String(h).trim().toLowerCase()];
+    if(key) obj[key] = rawRow[h];
+  });
+  return obj;
+}
+
+function parseDateCell(v){
+  if(v===undefined || v===null || v==='') return null;
+  if(typeof v === 'number'){
+    const dc = XLSX.SSF.parse_date_code(v);
+    if(!dc || !dc.y) return null;
+    return `${dc.y}-${pad2(dc.m)}-${pad2(dc.d)}`;
+  }
+  if(v instanceof Date && !isNaN(v)) return v.toISOString().slice(0,10);
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(m) return `${m[1]}-${pad2(m[2])}-${pad2(m[3])}`;
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if(m) return `${m[3]}-${pad2(m[2])}-${pad2(m[1])}`;
+  const d = new Date(s);
+  if(!isNaN(d)) return d.toISOString().slice(0,10);
+  return null;
+}
+function parseTimeCell(v){
+  if(v===undefined || v===null || v==='') return null;
+  if(typeof v === 'number'){
+    const dc = XLSX.SSF.parse_date_code(v);
+    if(!dc) return null;
+    return `${pad2(dc.H)}:${pad2(dc.M)}`;
+  }
+  const s = String(v).trim();
+  const m = s.match(/^(\d{1,2}):(\d{2})/);
+  if(m) return `${pad2(Number(m[1]))}:${m[2]}`;
+  return null;
+}
+
+function downloadImportTemplate(){
+  const sample = [{
+    'كود الموظف':'EMP-001', 'التاريخ':'2026-08-01', 'وقت الحضور':'08:05', 'وقت الانصراف':'16:20', 'ملاحظات':''
+  }];
+  const ws = XLSX.utils.json_to_sheet(sample);
+  ws['!cols'] = [{wch:14},{wch:14},{wch:12},{wch:12},{wch:24}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'قالب الاستيراد');
+  XLSX.writeFile(wb, 'قالب_استيراد_الحضور.xlsx');
+}
+document.getElementById('btn-download-template').addEventListener('click', downloadImportTemplate);
+
+const dropzone = document.getElementById('dropzone');
+const importFileInput = document.getElementById('import-file');
+dropzone.addEventListener('click', ()=> importFileInput.click());
+dropzone.addEventListener('dragover', e=>{ e.preventDefault(); dropzone.classList.add('drag'); });
+dropzone.addEventListener('dragleave', ()=> dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', e=>{
+  e.preventDefault(); dropzone.classList.remove('drag');
+  if(e.dataTransfer.files.length) handleImportFile(e.dataTransfer.files[0]);
+});
+importFileInput.addEventListener('change', e=>{
+  if(e.target.files.length) handleImportFile(e.target.files[0]);
+});
+
+let importRows = []; // preview rows with computed status
+
+function handleImportFile(file){
+  const reader = new FileReader();
+  reader.onload = function(evt){
+    try{
+      const data = new Uint8Array(evt.target.result);
+      const wb = XLSX.read(data, { type:'array' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json(sheet, { defval:'' });
+      if(raw.length===0){ toast('الملف لا يحتوي على أي صفوف بيانات'); return; }
+      buildImportPreview(raw);
+    }catch(err){
+      toast('تعذّرت قراءة الملف — تأكد من أنه بصيغة Excel أو CSV صحيحة');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function buildImportPreview(rawRows){
+  // Keys already present in the DB, used to flag duplicates.
+  const existingKeys = new Set(transactions.map(t => `${t.employeeId}|${t.date}|${t.type}|${t.subCategory}|${t.value}`));
+  const seenInFile = new Set();
+
+  importRows = rawRows.map((raw, idx)=>{
+    const row = normalizeImportRow(raw);
+    const rowNum = idx + 2; // account for header row
+    const codeRaw = (row.code !== undefined) ? String(row.code).trim() : '';
+    const date = parseDateCell(row.date);
+    const inTime = parseTimeCell(row.in);
+    const outTime = parseTimeCell(row.out);
+    const notes = row.notes ? String(row.notes).trim() : '';
+
+    let status = 'valid', reason = '';
+    const emp = employees.find(e => e.code.toLowerCase() === codeRaw.toLowerCase());
+
+    if(!codeRaw){ status='err'; reason='كود الموظف مفقود'; }
+    else if(!emp){ status='err'; reason=`كود الموظف غير موجود في النظام: ${codeRaw}`; }
+    else if(!date){ status='err'; reason='تاريخ غير صالح أو مفقود'; }
+    else if(!inTime && !outTime){ status='err'; reason='لا توجد بيانات وقت حضور أو انصراف'; }
+    else if((row.in && !inTime) || (row.out && !outTime)){ status='err'; reason='صيغة الوقت غير صحيحة (المتوقع HH:MM)'; }
+
+    let dupOf = [];
+    if(status==='valid'){
+      if(inTime){
+        const k = `${emp.id}|${date}|attendance|in|${inTime}`;
+        if(existingKeys.has(k) || seenInFile.has(k)) dupOf.push('حضور'); else seenInFile.add(k);
+      }
+      if(outTime){
+        const k = `${emp.id}|${date}|attendance|out|${outTime}`;
+        if(existingKeys.has(k) || seenInFile.has(k)) dupOf.push('انصراف'); else seenInFile.add(k);
+      }
+      if(dupOf.length && dupOf.length === (inTime && outTime ? 2 : 1)){
+        status = 'dup'; reason = 'مطابقة تماماً لحركة موجودة مسبقاً — سيتم تجاهلها';
+      } else if(dupOf.length){
+        reason = `سيتم استيراد ما هو جديد فقط (${dupOf.join(' و')} مكرر)`;
+      }
+    }
+
+    return { rowNum, empId: emp ? emp.id : null, code: codeRaw, date, inTime, outTime, notes, status, reason, importedInTime: dupOf.includes('حضور'), importedOutTime: dupOf.includes('انصراف') };
+  });
+
+  renderImportPreview();
+}
+
+function renderImportPreview(){
+  const wrap = document.getElementById('import-preview-wrap');
+  const sumWrap = document.getElementById('import-summary-wrap');
+  document.getElementById('btn-clear-import').style.display = 'inline-flex';
+  if(importRows.length===0){ wrap.style.display='none'; sumWrap.style.display='none'; return; }
+  wrap.style.display='block'; sumWrap.style.display='block';
+
+  const validCount = importRows.filter(r=>r.status==='valid').length;
+  const dupCount = importRows.filter(r=>r.status==='dup').length;
+  const errCount = importRows.filter(r=>r.status==='err').length;
+
+  document.getElementById('import-summary').innerHTML = `
+    <span class="chip">إجمالي الصفوف: ${importRows.length}</span>
+    <span class="chip" style="color:var(--teal-dark);">صالحة للاستيراد: ${validCount}</span>
+    <span class="chip" style="color:var(--gold);">مكرّرة (سيتم تجاهلها): ${dupCount}</span>
+    <span class="chip" style="color:var(--rust);">أخطاء: ${errCount}</span>
+  `;
+  document.getElementById('import-count-badge').textContent = importRows.length;
+
+  const STATUS_LABEL = { valid:'صالح', dup:'مكرر', err:'خطأ' };
+  document.getElementById('import-table-body').innerHTML = importRows.map(r=>`
+    <tr>
+      <td class="num">${r.rowNum}</td>
+      <td>${r.code || '<span style="color:var(--muted)">—</span>'}</td>
+      <td class="num">${r.date || '—'}</td>
+      <td class="num">${r.inTime || '—'}</td>
+      <td class="num">${r.outTime || '—'}</td>
+      <td>${r.notes || '<span style="color:var(--muted)">—</span>'}</td>
+      <td><span class="status-pill ${r.status}">${STATUS_LABEL[r.status]}</span></td>
+      <td style="white-space:normal;font-size:11.8px;color:var(--muted);">${r.reason || '—'}</td>
+    </tr>
+  `).join('');
+
+  document.getElementById('btn-confirm-import').disabled = validCount===0;
+}
+
+document.getElementById('btn-confirm-import').addEventListener('click', function(){
+  const toImport = importRows.filter(r=>r.status==='valid');
+  if(toImport.length===0){ toast('لا توجد صفوف صالحة للاستيراد'); return; }
+  let imported = 0;
+  toImport.forEach(r=>{
+    if((r.inTime && !r.importedInTime) || (r.outTime && !r.importedOutTime)){
+      resolveLeaveConflictOnAttendance(r.empId, r.date);
+    }
+    if(r.inTime && !r.importedInTime){
+      transactions.push({ id: uid('tx'), employeeId:r.empId, date:r.date, type:'attendance', subCategory:'in', value:r.inTime, notes: r.notes || 'مستوردة من ملف Excel', createdAt: Date.now() });
+      imported++;
+    }
+    if(r.outTime && !r.importedOutTime){
+      transactions.push({ id: uid('tx'), employeeId:r.empId, date:r.date, type:'attendance', subCategory:'out', value:r.outTime, notes: r.notes || 'مستوردة من ملف Excel', createdAt: Date.now() });
+      imported++;
+    }
+  });
+  saveTx();
+  importRows.forEach(r=>{ if(r.status==='valid') r.status='done'; });
+  document.querySelectorAll('#import-table-body .status-pill.valid').forEach(p=>{ p.textContent='مستوردة'; p.className='status-pill done'; });
+  document.getElementById('btn-confirm-import').disabled = true;
+  toast(`تم استيراد ${imported} حركة بنجاح`);
+  renderOverview();
+});
+
+document.getElementById('btn-clear-import').addEventListener('click', function(){
+  importRows = [];
+  importFileInput.value = '';
+  document.getElementById('import-preview-wrap').style.display='none';
+  document.getElementById('import-summary-wrap').style.display='none';
+  this.style.display='none';
+});
+
+function renderImportView(){
+  // no dynamic setup needed beyond existing state; kept for symmetry with other views
+}
+
+/* ======================= MOBILE SIDEBAR ======================= */
+(function(){
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  const openBtn = document.getElementById('menu-toggle');
+  const closeBtn = document.getElementById('sidebar-close');
+  if(!sidebar || !overlay || !openBtn) return;
+  function openSidebar(){ sidebar.classList.add('open'); overlay.classList.add('show'); }
+  function closeSidebar(){ sidebar.classList.remove('open'); overlay.classList.remove('show'); }
+  openBtn.addEventListener('click', openSidebar);
+  overlay.addEventListener('click', closeSidebar);
+  if(closeBtn) closeBtn.addEventListener('click', closeSidebar);
+  sidebar.querySelectorAll('.navitem').forEach(function(btn){
+    btn.addEventListener('click', closeSidebar);
+  });
+})();
+
+/* ======================= INIT ======================= */
+migrateEmployees();
+renderOverview();
+renderTxView();
+renderEmployees();
+renderReportsSetup();
+renderSettingsView();
+</script>
+</body>
+</html>
