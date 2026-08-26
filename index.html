@@ -474,10 +474,129 @@
   .pdf-list-cell.c-l-name{flex:0 0 28%;}
   .pdf-list-cell.c-l-type{flex:0 0 28%;}
   .pdf-list-cell.c-l-note{flex:0 0 44%;white-space:normal;font-family:var(--font-mono);}
+/* ---- Auth gate + role-specific shells (manager / employee) ---- */
+.auth-overlay{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:500;padding:20px;}
+.auth-box{width:100%;max-width:360px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:28px 24px;box-shadow:0 10px 30px rgba(0,0,0,.08);}
+.role-shell{min-height:100vh;background:var(--bg);}
+.role-topbar{display:flex;align-items:center;gap:12px;padding:14px 18px;background:var(--surface);border-bottom:1px solid var(--line);}
+.role-main{max-width:720px;margin:0 auto;padding:18px 16px 50px;}
+@media (max-width:600px){ .auth-box{padding:22px 18px;} }
 </style>
 </head>
 <body>
-<div class="app">
+
+<!-- ======================= AUTH: LOGIN GATE ======================= -->
+<div class="auth-overlay" id="auth-login-overlay">
+  <div class="auth-box">
+    <div class="brand-mark" style="margin:0 auto 14px;">سجل</div>
+    <h2 style="text-align:center;margin-bottom:4px;">تسجيل الدخول</h2>
+    <p class="hint" style="text-align:center;margin-bottom:18px;">نظام سِجِلّ لإدارة الحضور والانصراف</p>
+    <form id="auth-login-form">
+      <div class="field">
+        <label>البريد الإلكتروني</label>
+        <input type="email" id="auth-email" required autocomplete="username">
+      </div>
+      <div class="field">
+        <label>كلمة المرور</label>
+        <input type="password" id="auth-password" required autocomplete="current-password">
+      </div>
+      <div id="auth-error" style="color:var(--rust);font-size:12.8px;margin-bottom:10px;display:none;"></div>
+      <button type="submit" class="btn btn-primary" style="width:100%;" id="auth-login-btn">دخول</button>
+    </form>
+  </div>
+</div>
+
+<!-- ======================= MANAGER VIEW (approvals only) ======================= -->
+<div class="role-shell" id="manager-shell" style="display:none;">
+  <header class="role-topbar">
+    <div class="brand-mark">سجل</div>
+    <div style="flex:1;">
+      <div class="t1" style="font-weight:800;">طلبات الموافقة</div>
+      <div class="hint" id="manager-name-label"></div>
+    </div>
+    <button class="btn btn-ghost btn-sm" id="manager-logout-btn">تسجيل الخروج</button>
+  </header>
+  <main class="role-main">
+    <div class="card">
+      <h2>إجازات ومستحقات بانتظار موافقتك</h2>
+      <div id="manager-requests-list"><p class="hint">جارٍ التحميل...</p></div>
+    </div>
+  </main>
+</div>
+
+<!-- ======================= EMPLOYEE VIEW (self-service) ======================= -->
+<div class="role-shell" id="employee-shell" style="display:none;">
+  <header class="role-topbar">
+    <div class="brand-mark">سجل</div>
+    <div style="flex:1;">
+      <div class="t1" style="font-weight:800;" id="employee-name-label"></div>
+      <div class="hint">حضورك وطلباتك</div>
+    </div>
+    <button class="btn btn-ghost btn-sm" id="employee-logout-btn">تسجيل الخروج</button>
+  </header>
+  <main class="role-main">
+    <div class="card">
+      <h2>تسجيل الحضور والانصراف</h2>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-primary" id="employee-checkin-btn" type="button">تسجيل حضور</button>
+        <button class="btn btn-ghost" id="employee-checkout-btn" type="button">تسجيل انصراف</button>
+      </div>
+      <div class="hint" id="employee-attendance-status" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h2>تقديم طلب جديد</h2>
+      <div class="form-row">
+        <div class="field">
+          <label>نوع الطلب</label>
+          <select id="employee-request-kind">
+            <option value="leave">إجازة</option>
+            <option value="claim">مستحقات</option>
+          </select>
+        </div>
+        <div class="field" id="employee-leave-type-field">
+          <label>نوع الإجازة</label>
+          <select id="employee-leave-type">
+            <option value="annual">سنوية</option>
+            <option value="casual">اضطرارية</option>
+            <option value="sick">مرضية</option>
+            <option value="unpaid">بدون مرتب</option>
+          </select>
+        </div>
+        <div class="field" id="employee-claim-type-field" style="display:none;">
+          <label>نوع المستحقات</label>
+          <input id="employee-claim-type" placeholder="مثال: بدل مواصلات">
+        </div>
+      </div>
+      <div class="form-row" id="employee-leave-dates-row">
+        <div class="field">
+          <label>من تاريخ</label>
+          <input type="date" id="employee-leave-from">
+        </div>
+        <div class="field">
+          <label>إلى تاريخ</label>
+          <input type="date" id="employee-leave-to">
+        </div>
+      </div>
+      <div class="field" id="employee-claim-amount-field" style="display:none;">
+        <label>المبلغ</label>
+        <input type="number" step="0.01" id="employee-claim-amount">
+      </div>
+      <div class="field">
+        <label>ملاحظات <span class="hint">(اختياري)</span></label>
+        <textarea id="employee-request-notes"></textarea>
+      </div>
+      <button class="btn btn-primary btn-sm" id="employee-submit-request-btn" type="button">إرسال الطلب</button>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h2>طلباتي</h2>
+      <div id="employee-my-requests"><p class="hint">جارٍ التحميل...</p></div>
+    </div>
+  </main>
+</div>
+
+<div class="app" id="app-shell" style="display:none;">
 
   <div class="sidebar-overlay" id="sidebar-overlay"></div>
 
@@ -989,6 +1108,71 @@
           <button class="btn btn-ghost btn-sm" id="sb-pull-btn" type="button">استعادة من Supabase</button>
         </div>
         <div class="hint" id="sb-sync-status" style="margin-top:10px;">جارٍ التحقق من حالة المزامنة...</div>
+      </div>
+
+      <div class="card" style="margin-top:18px;">
+        <h2>إدارة الحسابات (حضور، إجازات، موافقات)</h2>
+        <p class="hint" style="margin:-4px 0 12px;">أنشئ حساب دخول لكل موظف ليتمكن من تسجيل حضوره وانصرافه وطلب الإجازات/المستحقات من جهازه، أو حساب مدير مباشر ليوافق على طلبات فريقه. البريد وكلمة المرور المؤقتة يُرسَلان للموظف مباشرة من قِبَلكم — النظام لا يرسل بريدًا تلقائيًا.</p>
+        <div class="form-row">
+          <div class="field">
+            <label>الاسم الكامل</label>
+            <input id="acc-full-name">
+          </div>
+          <div class="field">
+            <label>الرقم الوظيفي</label>
+            <input id="acc-emp-code">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>البريد الإلكتروني</label>
+            <input type="email" id="acc-email">
+          </div>
+          <div class="field">
+            <label>كلمة مرور مؤقتة</label>
+            <input id="acc-temp-password" placeholder="8 أحرف على الأقل">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>الصلاحية</label>
+            <select id="acc-role">
+              <option value="employee">موظف</option>
+              <option value="manager">مدير مباشر</option>
+              <option value="hr">موارد بشرية</option>
+              <option value="admin">مدير النظام</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>المدير المباشر <span class="hint">(اختياري)</span></label>
+            <select id="acc-manager"><option value="">— بلا مدير مباشر —</option></select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>نمط الحضور</label>
+            <select id="acc-attendance-mode">
+              <option value="geofenced">بنطاق جغرافي محدد</option>
+              <option value="field">عمل ميداني (تسجيل الموقع بلا نطاق)</option>
+            </select>
+          </div>
+          <div class="field" id="acc-geofence-radius-field">
+            <label>نصف قطر النطاق (متر)</label>
+            <input type="number" id="acc-geofence-radius" placeholder="مثال: 120">
+          </div>
+        </div>
+        <div class="form-row" id="acc-geofence-latlng-row">
+          <div class="field">
+            <label>خط العرض (Latitude)</label>
+            <input type="number" step="any" id="acc-geofence-lat">
+          </div>
+          <div class="field">
+            <label>خط الطول (Longitude)</label>
+            <input type="number" step="any" id="acc-geofence-lng">
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" id="acc-create-btn" type="button">إنشاء الحساب</button>
+        <div class="hint" id="acc-create-status" style="margin-top:10px;"></div>
       </div>
     </section>
 
@@ -2369,6 +2553,85 @@ function renderSettingsView(){
   initIntervalRuleSettings();
   initScheduleOverrideSettings();
   initSupabaseSyncSettings();
+  initAccountManagementSettings();
+}
+
+/* ---- Account management (create login accounts via secure Edge Function) ----
+   Note: this manages the NEW `public.employees` / `public.profiles` tables
+   (accounts, roles, geofenced attendance) — a separate dataset from the
+   LocalStorage-based employee list used by the rest of this page. The two
+   will be reconciled in a later phase; for now this panel is self-contained. */
+async function refreshAccountManagerOptions(){
+  const sel = document.getElementById('acc-manager');
+  if(!sbClient) return;
+  try{
+    const { data, error } = await sbClient.from('employees').select('id, name, code').order('name');
+    if(error) throw error;
+    const current = sel.value;
+    sel.innerHTML = '<option value="">— بلا مدير مباشر —</option>' + (data||[]).map(e=>`<option value="${e.id}">${e.name} (${e.code})</option>`).join('');
+    sel.value = current;
+  }catch(e){ /* silent — non-critical */ }
+}
+function initAccountManagementSettings(){
+  const modeSel = document.getElementById('acc-attendance-mode');
+  const radiusField = document.getElementById('acc-geofence-radius-field');
+  const latlngRow = document.getElementById('acc-geofence-latlng-row');
+  function syncGeoFields(){
+    const isField = modeSel.value==='field';
+    radiusField.style.display = isField ? 'none' : '';
+    latlngRow.style.display = isField ? 'none' : '';
+  }
+  const btn = document.getElementById('acc-create-btn');
+  if(!btn.dataset.bound){
+    btn.dataset.bound = '1';
+    modeSel.addEventListener('change', syncGeoFields);
+    btn.addEventListener('click', createEmployeeAccount);
+  }
+  syncGeoFields();
+  refreshAccountManagerOptions();
+}
+async function createEmployeeAccount(){
+  const statusEl = document.getElementById('acc-create-status');
+  const fullName = document.getElementById('acc-full-name').value.trim();
+  const empCode = document.getElementById('acc-emp-code').value.trim();
+  const email = document.getElementById('acc-email').value.trim();
+  const tempPassword = document.getElementById('acc-temp-password').value;
+  const role = document.getElementById('acc-role').value;
+  const managerId = document.getElementById('acc-manager').value || null;
+  const mode = document.getElementById('acc-attendance-mode').value;
+  const radius = document.getElementById('acc-geofence-radius').value;
+  const lat = document.getElementById('acc-geofence-lat').value;
+  const lng = document.getElementById('acc-geofence-lng').value;
+
+  if(!fullName || !empCode || !email || !tempPassword){ statusEl.textContent = 'يرجى تعبئة الاسم، الرقم الوظيفي، البريد، وكلمة المرور المؤقتة'; return; }
+  if(tempPassword.length < 8){ statusEl.textContent = 'كلمة المرور المؤقتة يجب ألا تقل عن 8 أحرف'; return; }
+  if(!sbClient){ statusEl.textContent = 'تعذّر الاتصال بـ Supabase'; return; }
+
+  statusEl.textContent = 'جارٍ إنشاء الحساب...';
+  try{
+    const { data: sessionData } = await sbClient.auth.getSession();
+    const token = sessionData && sessionData.session ? sessionData.session.access_token : null;
+    if(!token){ statusEl.textContent = 'انتهت الجلسة — يرجى إعادة تسجيل الدخول'; return; }
+    const res = await fetch(SUPABASE_URL + '/functions/v1/create-employee-account', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization':'Bearer ' + token },
+      body: JSON.stringify({
+        email, temp_password: tempPassword, full_name: fullName, role,
+        employee_code: empCode, employee_name: fullName, manager_id: managerId,
+        attendance_mode: mode,
+        geofence_lat: mode==='field' ? null : (lat || null),
+        geofence_lng: mode==='field' ? null : (lng || null),
+        geofence_radius_m: mode==='field' ? null : (radius || null),
+      })
+    });
+    const json = await res.json();
+    if(!res.ok || json.error) throw new Error(json.error || 'خطأ غير معروف');
+    statusEl.textContent = 'تم إنشاء الحساب بنجاح — أرسل البريد وكلمة المرور المؤقتة للموظف بشكل آمن.';
+    ['acc-full-name','acc-emp-code','acc-email','acc-temp-password','acc-geofence-radius','acc-geofence-lat','acc-geofence-lng'].forEach(id=>{ document.getElementById(id).value = ''; });
+    refreshAccountManagerOptions();
+  }catch(e){
+    statusEl.textContent = 'تعذّر إنشاء الحساب: ' + (e && e.message ? e.message : 'خطأ غير معروف');
+  }
 }
 
 // Employee-list picker dedicated to the comprehensive PDF export — lets the
@@ -3633,17 +3896,239 @@ function renderImportView(){
   });
 })();
 
-/* ======================= INIT ======================= */
-migrateEmployees();
-renderOverview();
-renderTxView();
-renderEmployees();
-renderReportsSetup();
-renderSettingsView();
-checkForRemoteUpdatesOnLoad();
-document.addEventListener('visibilitychange', function(){
-  if(document.visibilityState==='visible') checkForRemoteUpdatesOnLoad();
+/* ======================= INIT (hr/admin — the full existing app) ======================= */
+// Wrapped in a function now: it only runs once a signed-in hr/admin
+// account has been confirmed by the auth gate below, instead of running
+// unconditionally for anyone who opens the page.
+let sijilAppInitialized = false;
+function initHrAdminApp(){
+  if(sijilAppInitialized) return;
+  sijilAppInitialized = true;
+  migrateEmployees();
+  renderOverview();
+  renderTxView();
+  renderEmployees();
+  renderReportsSetup();
+  renderSettingsView();
+  checkForRemoteUpdatesOnLoad();
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState==='visible') checkForRemoteUpdatesOnLoad();
+  });
+}
+
+/* ======================= AUTH GATE + ROLE ROUTING ======================= */
+let currentAuthUser = null;
+let currentProfile = null;
+
+function showAuthError(msg){
+  const el = document.getElementById('auth-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function routeByRole(role){
+  document.getElementById('app-shell').style.display = 'none';
+  document.getElementById('manager-shell').style.display = 'none';
+  document.getElementById('employee-shell').style.display = 'none';
+  if(role==='hr' || role==='admin'){
+    document.getElementById('app-shell').style.display = '';
+    initHrAdminApp();
+  } else if(role==='manager'){
+    document.getElementById('manager-shell').style.display = '';
+    document.getElementById('manager-name-label').textContent = currentProfile.full_name || '';
+    initManagerView();
+  } else {
+    document.getElementById('employee-shell').style.display = '';
+    document.getElementById('employee-name-label').textContent = currentProfile.full_name || 'مرحباً';
+    initEmployeeView();
+  }
+}
+
+async function handleAuthedSession(session){
+  currentAuthUser = session.user;
+  const { data: profile, error } = await sbClient.from('profiles')
+    .select('id, employee_id, role, full_name, active').eq('id', currentAuthUser.id).maybeSingle();
+  if(error || !profile || !profile.active){
+    showAuthError('هذا الحساب غير مفعّل أو غير مرتبط بصلاحية — يرجى مراجعة الموارد البشرية');
+    await sbClient.auth.signOut();
+    return;
+  }
+  currentProfile = profile;
+  document.getElementById('auth-login-overlay').style.display = 'none';
+  routeByRole(profile.role);
+}
+
+document.getElementById('auth-login-form').addEventListener('submit', async function(e){
+  e.preventDefault();
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const btn = document.getElementById('auth-login-btn');
+  if(!sbClient){ showAuthError('تعذّر تحميل مكتبة الدخول — تحقق من الاتصال بالإنترنت'); return; }
+  btn.disabled = true; btn.textContent = 'جارٍ الدخول...';
+  document.getElementById('auth-error').style.display = 'none';
+  try{
+    const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
+    if(error) throw error;
+    await handleAuthedSession(data.session);
+  }catch(err){
+    showAuthError('تعذّر تسجيل الدخول — تحقق من البريد وكلمة المرور');
+  }finally{
+    btn.disabled = false; btn.textContent = 'دخول';
+  }
 });
+
+async function logoutCurrentUser(){
+  if(sbClient) await sbClient.auth.signOut();
+  location.reload();
+}
+document.getElementById('manager-logout-btn').addEventListener('click', logoutCurrentUser);
+document.getElementById('employee-logout-btn').addEventListener('click', logoutCurrentUser);
+
+async function bootstrapAuth(){
+  if(!sbClient){
+    showAuthError('تعذّر تحميل مكتبة الدخول — تحقق من الاتصال بالإنترنت وأعد تحميل الصفحة');
+    return;
+  }
+  const { data } = await sbClient.auth.getSession();
+  if(data && data.session) await handleAuthedSession(data.session);
+  // Otherwise the login overlay simply stays visible (its default state).
+}
+bootstrapAuth();
+
+/* ======================= MANAGER VIEW LOGIC ======================= */
+async function initManagerView(){
+  const box = document.getElementById('manager-requests-list');
+  box.innerHTML = '<p class="hint">جارٍ التحميل...</p>';
+  try{
+    const [leaveRes, claimRes] = await Promise.all([
+      sbClient.from('leave_requests').select('id, employee_id, type, from_date, to_date, notes, status, requested_at, employees(name, code)').eq('status','pending').order('requested_at', { ascending:true }),
+      sbClient.from('claim_requests').select('id, employee_id, claim_type, amount, notes, status, requested_at, employees(name, code)').eq('status','pending').order('requested_at', { ascending:true }),
+    ]);
+    if(leaveRes.error) throw leaveRes.error;
+    if(claimRes.error) throw claimRes.error;
+    const leaveRows = (leaveRes.data||[]).map(r=>({ kind:'leave', ...r }));
+    const claimRows = (claimRes.data||[]).map(r=>({ kind:'claim', ...r }));
+    const all = leaveRows.concat(claimRows);
+    if(all.length===0){ box.innerHTML = '<p class="hint">لا توجد طلبات بانتظار موافقتك حالياً.</p>'; return; }
+    box.innerHTML = all.map(r=>{
+      const empName = r.employees ? `${r.employees.name} (${r.employees.code})` : '—';
+      const desc = r.kind==='leave'
+        ? `طلب إجازة ${LEAVE_TYPE_LABELS_AR[r.type]||r.type} من ${r.from_date} إلى ${r.to_date}`
+        : `طلب مستحقات: ${r.claim_type}${r.amount!=null ? ' — ' + r.amount : ''}`;
+      return `
+      <div class="variance-row">
+        <div class="vinfo">
+          <div class="vtype">${empName} <span class="badge neu">${desc}</span></div>
+          <div class="vdetail">${r.notes ? r.notes : ''}</div>
+        </div>
+        <div class="vactions">
+          <button class="btn btn-ghost btn-sm" onclick="decideManagerRequest('${r.kind}','${r.id}','approved')">موافقة</button>
+          <button class="btn btn-danger" onclick="decideManagerRequest('${r.kind}','${r.id}','rejected')">رفض</button>
+        </div>
+      </div>`;
+    }).join('');
+  }catch(e){
+    box.innerHTML = '<p class="hint">تعذّر تحميل الطلبات.</p>';
+  }
+}
+const LEAVE_TYPE_LABELS_AR = { annual:'سنوية', casual:'اضطرارية', sick:'مرضية', unpaid:'بدون مرتب' };
+async function decideManagerRequest(kind, id, decision){
+  const table = kind==='leave' ? 'leave_requests' : 'claim_requests';
+  const { error } = await sbClient.from(table).update({
+    status: decision, decided_by: currentAuthUser.id, decided_at: new Date().toISOString()
+  }).eq('id', id);
+  if(error){ alert('تعذّر تنفيذ العملية'); return; }
+  initManagerView();
+}
+
+/* ======================= EMPLOYEE SELF-SERVICE VIEW LOGIC ======================= */
+function initEmployeeView(){
+  loadMyRequests();
+  const kindSel = document.getElementById('employee-request-kind');
+  kindSel.addEventListener('change', updateEmployeeRequestFormVisibility);
+  updateEmployeeRequestFormVisibility();
+  document.getElementById('employee-checkin-btn').addEventListener('click', ()=>submitAttendance('check_in'));
+  document.getElementById('employee-checkout-btn').addEventListener('click', ()=>submitAttendance('check_out'));
+  document.getElementById('employee-submit-request-btn').addEventListener('click', submitEmployeeRequest);
+}
+function updateEmployeeRequestFormVisibility(){
+  const isLeave = document.getElementById('employee-request-kind').value==='leave';
+  document.getElementById('employee-leave-type-field').style.display = isLeave ? '' : 'none';
+  document.getElementById('employee-leave-dates-row').style.display = isLeave ? '' : 'none';
+  document.getElementById('employee-claim-type-field').style.display = isLeave ? 'none' : '';
+  document.getElementById('employee-claim-amount-field').style.display = isLeave ? 'none' : '';
+}
+function submitAttendance(type){
+  const statusEl = document.getElementById('employee-attendance-status');
+  if(!navigator.geolocation){ statusEl.textContent = 'المتصفح لا يدعم تحديد الموقع.'; return; }
+  statusEl.textContent = 'جارٍ تحديد موقعك...';
+  navigator.geolocation.getCurrentPosition(async function(pos){
+    try{
+      const { data, error } = await sbClient.rpc('record_attendance', {
+        p_type: type,
+        p_lat: pos.coords.latitude,
+        p_lng: pos.coords.longitude,
+        p_accuracy: pos.coords.accuracy,
+        p_device_info: navigator.userAgent
+      });
+      if(error) throw error;
+      let msg = type==='check_in' ? 'تم تسجيل الحضور.' : 'تم تسجيل الانصراف.';
+      if(data && data.within_geofence===false) msg += ' ملاحظة: موقعك خارج النطاق المحدد — سيراجعها قسم الموارد البشرية.';
+      statusEl.textContent = msg;
+    }catch(e){
+      statusEl.textContent = 'تعذّر تسجيل الحضور: ' + (e && e.message ? e.message : 'خطأ غير معروف');
+    }
+  }, function(){
+    statusEl.textContent = 'تعذّر الحصول على موقعك — تأكد من السماح بالوصول للموقع الجغرافي.';
+  }, { enableHighAccuracy:true, timeout:15000 });
+}
+async function submitEmployeeRequest(){
+  const kind = document.getElementById('employee-request-kind').value;
+  const notes = document.getElementById('employee-request-notes').value.trim();
+  const employeeId = currentProfile.employee_id;
+  if(!employeeId){ alert('حسابك غير مرتبط بسجل موظف — راجع الموارد البشرية'); return; }
+  try{
+    if(kind==='leave'){
+      const type = document.getElementById('employee-leave-type').value;
+      const from = document.getElementById('employee-leave-from').value;
+      const to = document.getElementById('employee-leave-to').value;
+      if(!from || !to){ alert('يرجى تحديد نطاق التاريخ'); return; }
+      const { error } = await sbClient.from('leave_requests').insert({ employee_id: employeeId, type, from_date: from, to_date: to, notes });
+      if(error) throw error;
+    } else {
+      const claimType = document.getElementById('employee-claim-type').value.trim();
+      const amount = document.getElementById('employee-claim-amount').value;
+      if(!claimType){ alert('يرجى كتابة نوع المستحقات'); return; }
+      const { error } = await sbClient.from('claim_requests').insert({ employee_id: employeeId, claim_type: claimType, amount: amount || null, notes });
+      if(error) throw error;
+    }
+    document.getElementById('employee-request-notes').value = '';
+    loadMyRequests();
+    alert('تم إرسال طلبك بنجاح، بانتظار موافقة مديرك المباشر.');
+  }catch(e){
+    alert('تعذّر إرسال الطلب');
+  }
+}
+async function loadMyRequests(){
+  const box = document.getElementById('employee-my-requests');
+  const employeeId = currentProfile.employee_id;
+  if(!employeeId){ box.innerHTML = '<p class="hint">حسابك غير مرتبط بسجل موظف.</p>'; return; }
+  box.innerHTML = '<p class="hint">جارٍ التحميل...</p>';
+  const STATUS_LABELS = { pending:'قيد الانتظار', approved:'مُعتمدة', rejected:'مرفوضة', cancelled:'ملغاة' };
+  try{
+    const [leaveRes, claimRes] = await Promise.all([
+      sbClient.from('leave_requests').select('id, type, from_date, to_date, status, requested_at').eq('employee_id', employeeId).order('requested_at', { ascending:false }),
+      sbClient.from('claim_requests').select('id, claim_type, amount, status, requested_at').eq('employee_id', employeeId).order('requested_at', { ascending:false }),
+    ]);
+    if(leaveRes.error) throw leaveRes.error;
+    if(claimRes.error) throw claimRes.error;
+    const rows = (leaveRes.data||[]).map(r=>`إجازة ${LEAVE_TYPE_LABELS_AR[r.type]||r.type}: ${r.from_date} → ${r.to_date} — <span class="badge neu">${STATUS_LABELS[r.status]||r.status}</span>`)
+      .concat((claimRes.data||[]).map(r=>`مستحقات: ${r.claim_type}${r.amount!=null?' ('+r.amount+')':''} — <span class="badge neu">${STATUS_LABELS[r.status]||r.status}</span>`));
+    box.innerHTML = rows.length ? rows.map(r=>`<div class="variance-row"><div class="vinfo"><div class="vtype">${r}</div></div></div>`).join('') : '<p class="hint">لا توجد طلبات سابقة.</p>';
+  }catch(e){
+    box.innerHTML = '<p class="hint">تعذّر تحميل الطلبات.</p>';
+  }
+}
 </script>
 </body>
 </html>
