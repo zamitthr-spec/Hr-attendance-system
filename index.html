@@ -1111,8 +1111,19 @@
       </div>
 
       <div class="card" style="margin-top:18px;">
+        <h2>مزامنة قائمة الموظفين الحالية</h2>
+        <p class="hint" style="margin:-4px 0 12px;">النظام الحالي (سجل الحركات، التقارير...) يعمل على قائمة موظفين محلية منفصلة عن نظام الحسابات الجديد. اضغط الزر أدناه لنسخ كل موظف موجود حالياً (بالاسم والرقم الوظيفي وجدول الدوام) إلى نظام الحسابات، حتى تتمكن من إنشاء حساب دخول له مباشرة أدناه دون إعادة إدخال بياناته. يمكن تكرار هذا الزر بأمان في أي وقت لاحقاً — لن يُنشئ نسخاً مكررة (يُطابق حسب الرقم الوظيفي).</p>
+        <button class="btn btn-primary btn-sm" id="acc-migrate-btn" type="button">مزامنة الموظفين الحاليين الآن</button>
+        <div class="hint" id="acc-migrate-status" style="margin-top:10px;"></div>
+      </div>
+
+      <div class="card" style="margin-top:18px;">
         <h2>إدارة الحسابات (حضور، إجازات، موافقات)</h2>
         <p class="hint" style="margin:-4px 0 12px;">أنشئ حساب دخول لكل موظف ليتمكن من تسجيل حضوره وانصرافه وطلب الإجازات/المستحقات من جهازه، أو حساب مدير مباشر ليوافق على طلبات فريقه. البريد وكلمة المرور المؤقتة يُرسَلان للموظف مباشرة من قِبَلكم — النظام لا يرسل بريدًا تلقائيًا.</p>
+        <div class="field">
+          <label>اختر من الموظفين المُزامَنين <span class="hint">(اختياري — أو اترك على "موظف جديد" واملأ الاسم/الرقم الوظيفي يدوياً)</span></label>
+          <select id="acc-existing-employee"><option value="">— موظف جديد —</option></select>
+        </div>
         <div class="form-row">
           <div class="field">
             <label>الاسم الكامل</label>
@@ -2557,10 +2568,32 @@ function renderSettingsView(){
 }
 
 /* ---- Account management (create login accounts via secure Edge Function) ----
-   Note: this manages the NEW `public.employees` / `public.profiles` tables
-   (accounts, roles, geofenced attendance) — a separate dataset from the
-   LocalStorage-based employee list used by the rest of this page. The two
-   will be reconciled in a later phase; for now this panel is self-contained. */
+   `public.employees` (Supabase) is now kept as a mirror of the LocalStorage
+   employee list via the migration button below, matched by employee code,
+   so both systems share the same roster instead of drifting apart. */
+async function migrateLocalEmployeesToSupabase(){
+  const statusEl = document.getElementById('acc-migrate-status');
+  if(!sbClient){ statusEl.textContent = 'تعذّر الاتصال بـ Supabase'; return; }
+  if(!employees || employees.length===0){ statusEl.textContent = 'لا يوجد موظفون في النظام الحالي لمزامنتهم'; return; }
+  statusEl.textContent = 'جارٍ المزامنة...';
+  try{
+    const rows = employees.map(e=>({
+      code: e.code,
+      name: e.name,
+      department: e.dept || null,
+      daily_schedule: e.dailySchedule || null,
+      hire_date: e.hire || null,
+      active: true,
+    }));
+    const { error } = await sbClient.from('employees').upsert(rows, { onConflict:'code' });
+    if(error) throw error;
+    statusEl.textContent = `تمت مزامنة ${rows.length} موظف بنجاح. يمكنك الآن اختيارهم عند إنشاء الحسابات أدناه.`;
+    refreshAccountManagerOptions();
+    refreshExistingEmployeeOptions();
+  }catch(e){
+    statusEl.textContent = 'تعذّرت المزامنة: ' + (e && e.message ? e.message : 'خطأ غير معروف');
+  }
+}
 async function refreshAccountManagerOptions(){
   const sel = document.getElementById('acc-manager');
   if(!sbClient) return;
@@ -2569,6 +2602,23 @@ async function refreshAccountManagerOptions(){
     if(error) throw error;
     const current = sel.value;
     sel.innerHTML = '<option value="">— بلا مدير مباشر —</option>' + (data||[]).map(e=>`<option value="${e.id}">${e.name} (${e.code})</option>`).join('');
+    sel.value = current;
+  }catch(e){ /* silent — non-critical */ }
+}
+// Employees synced from LocalStorage but not yet linked to a login account —
+// picking one here avoids creating a duplicate `employees` row.
+async function refreshExistingEmployeeOptions(){
+  const sel = document.getElementById('acc-existing-employee');
+  if(!sbClient) return;
+  try{
+    const { data, error } = await sbClient
+      .from('employees')
+      .select('id, name, code, profiles(id)')
+      .order('name');
+    if(error) throw error;
+    const unlinked = (data||[]).filter(e=> !e.profiles || e.profiles.length===0);
+    const current = sel.value;
+    sel.innerHTML = '<option value="">— موظف جديد —</option>' + unlinked.map(e=>`<option value="${e.id}" data-name="${e.name}" data-code="${e.code}">${e.name} (${e.code})</option>`).join('');
     sel.value = current;
   }catch(e){ /* silent — non-critical */ }
 }
@@ -2581,17 +2631,35 @@ function initAccountManagementSettings(){
     radiusField.style.display = isField ? 'none' : '';
     latlngRow.style.display = isField ? 'none' : '';
   }
+  const existingSel = document.getElementById('acc-existing-employee');
+  const nameInput = document.getElementById('acc-full-name');
+  const codeInput = document.getElementById('acc-emp-code');
+  function syncExistingEmployeeFields(){
+    const opt = existingSel.options[existingSel.selectedIndex];
+    const picked = existingSel.value !== '';
+    if(picked){
+      nameInput.value = opt.dataset.name || '';
+      codeInput.value = opt.dataset.code || '';
+    }
+    nameInput.disabled = picked;
+    codeInput.disabled = picked;
+  }
+  const migrateBtn = document.getElementById('acc-migrate-btn');
   const btn = document.getElementById('acc-create-btn');
   if(!btn.dataset.bound){
     btn.dataset.bound = '1';
     modeSel.addEventListener('change', syncGeoFields);
+    existingSel.addEventListener('change', syncExistingEmployeeFields);
+    migrateBtn.addEventListener('click', migrateLocalEmployeesToSupabase);
     btn.addEventListener('click', createEmployeeAccount);
   }
   syncGeoFields();
   refreshAccountManagerOptions();
+  refreshExistingEmployeeOptions();
 }
 async function createEmployeeAccount(){
   const statusEl = document.getElementById('acc-create-status');
+  const existingEmployeeId = document.getElementById('acc-existing-employee').value || null;
   const fullName = document.getElementById('acc-full-name').value.trim();
   const empCode = document.getElementById('acc-emp-code').value.trim();
   const email = document.getElementById('acc-email').value.trim();
@@ -2603,7 +2671,8 @@ async function createEmployeeAccount(){
   const lat = document.getElementById('acc-geofence-lat').value;
   const lng = document.getElementById('acc-geofence-lng').value;
 
-  if(!fullName || !empCode || !email || !tempPassword){ statusEl.textContent = 'يرجى تعبئة الاسم، الرقم الوظيفي، البريد، وكلمة المرور المؤقتة'; return; }
+  if(!fullName || !email || !tempPassword){ statusEl.textContent = 'يرجى تعبئة الاسم، البريد، وكلمة المرور المؤقتة'; return; }
+  if(!existingEmployeeId && !empCode){ statusEl.textContent = 'يرجى إدخال الرقم الوظيفي، أو اختيار موظف موجود من القائمة أعلاه'; return; }
   if(tempPassword.length < 8){ statusEl.textContent = 'كلمة المرور المؤقتة يجب ألا تقل عن 8 أحرف'; return; }
   if(!sbClient){ statusEl.textContent = 'تعذّر الاتصال بـ Supabase'; return; }
 
@@ -2617,6 +2686,7 @@ async function createEmployeeAccount(){
       headers: { 'Content-Type':'application/json', 'Authorization':'Bearer ' + token },
       body: JSON.stringify({
         email, temp_password: tempPassword, full_name: fullName, role,
+        employee_id: existingEmployeeId,
         employee_code: empCode, employee_name: fullName, manager_id: managerId,
         attendance_mode: mode,
         geofence_lat: mode==='field' ? null : (lat || null),
@@ -2628,7 +2698,11 @@ async function createEmployeeAccount(){
     if(!res.ok || json.error) throw new Error(json.error || 'خطأ غير معروف');
     statusEl.textContent = 'تم إنشاء الحساب بنجاح — أرسل البريد وكلمة المرور المؤقتة للموظف بشكل آمن.';
     ['acc-full-name','acc-emp-code','acc-email','acc-temp-password','acc-geofence-radius','acc-geofence-lat','acc-geofence-lng'].forEach(id=>{ document.getElementById(id).value = ''; });
+    document.getElementById('acc-existing-employee').value = '';
+    document.getElementById('acc-full-name').disabled = false;
+    document.getElementById('acc-emp-code').disabled = false;
     refreshAccountManagerOptions();
+    refreshExistingEmployeeOptions();
   }catch(e){
     statusEl.textContent = 'تعذّر إنشاء الحساب: ' + (e && e.message ? e.message : 'خطأ غير معروف');
   }
