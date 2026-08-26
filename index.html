@@ -479,9 +479,6 @@
 /* ---- Auth gate + role-specific shells (manager / employee) ---- */
 .auth-overlay{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:500;padding:20px;}
 .auth-box{width:100%;max-width:360px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:28px 24px;box-shadow:0 10px 30px rgba(0,0,0,.08);}
-.role-shell{min-height:100vh;background:var(--bg);}
-.role-topbar{display:flex;align-items:center;gap:12px;padding:14px 18px;background:var(--surface);border-bottom:1px solid var(--line);}
-.role-main{max-width:720px;margin:0 auto;padding:18px 16px 50px;}
 @media (max-width:600px){ .auth-box{padding:22px 18px;} }
 </style>
 </head>
@@ -506,96 +503,6 @@
       <button type="submit" class="btn btn-primary" style="width:100%;" id="auth-login-btn">دخول</button>
     </form>
   </div>
-</div>
-
-<!-- ======================= MANAGER VIEW (approvals only) ======================= -->
-<div class="role-shell" id="manager-shell" style="display:none;">
-  <header class="role-topbar">
-    <div class="brand-mark">سجل</div>
-    <div style="flex:1;">
-      <div class="t1" style="font-weight:800;">طلبات الموافقة</div>
-      <div class="hint" id="manager-name-label"></div>
-    </div>
-    <button class="btn btn-ghost btn-sm" id="manager-logout-btn">تسجيل الخروج</button>
-  </header>
-  <main class="role-main">
-    <div class="card">
-      <h2>إجازات ومستحقات بانتظار موافقتك</h2>
-      <div id="manager-requests-list"><p class="hint">جارٍ التحميل...</p></div>
-    </div>
-  </main>
-</div>
-
-<!-- ======================= EMPLOYEE VIEW (self-service) ======================= -->
-<div class="role-shell" id="employee-shell" style="display:none;">
-  <header class="role-topbar">
-    <div class="brand-mark">سجل</div>
-    <div style="flex:1;">
-      <div class="t1" style="font-weight:800;" id="employee-name-label"></div>
-      <div class="hint">حضورك وطلباتك</div>
-    </div>
-    <button class="btn btn-ghost btn-sm" id="employee-logout-btn">تسجيل الخروج</button>
-  </header>
-  <main class="role-main">
-    <div class="card">
-      <h2>تسجيل الحضور والانصراف</h2>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <button class="btn btn-primary" id="employee-checkin-btn" type="button">تسجيل حضور</button>
-        <button class="btn btn-ghost" id="employee-checkout-btn" type="button">تسجيل انصراف</button>
-      </div>
-      <div class="hint" id="employee-attendance-status" style="margin-top:10px;"></div>
-    </div>
-
-    <div class="card" style="margin-top:16px;">
-      <h2>تقديم طلب جديد</h2>
-      <div class="form-row">
-        <div class="field">
-          <label>نوع الطلب</label>
-          <select id="employee-request-kind">
-            <option value="leave">إجازة</option>
-            <option value="claim">مستحقات</option>
-          </select>
-        </div>
-        <div class="field" id="employee-leave-type-field">
-          <label>نوع الإجازة</label>
-          <select id="employee-leave-type">
-            <option value="annual">سنوية</option>
-            <option value="casual">اضطرارية</option>
-            <option value="sick">مرضية</option>
-            <option value="unpaid">بدون مرتب</option>
-          </select>
-        </div>
-        <div class="field" id="employee-claim-type-field" style="display:none;">
-          <label>نوع المستحقات</label>
-          <input id="employee-claim-type" placeholder="مثال: بدل مواصلات">
-        </div>
-      </div>
-      <div class="form-row" id="employee-leave-dates-row">
-        <div class="field">
-          <label>من تاريخ</label>
-          <input type="date" id="employee-leave-from">
-        </div>
-        <div class="field">
-          <label>إلى تاريخ</label>
-          <input type="date" id="employee-leave-to">
-        </div>
-      </div>
-      <div class="field" id="employee-claim-amount-field" style="display:none;">
-        <label>المبلغ</label>
-        <input type="number" step="0.01" id="employee-claim-amount">
-      </div>
-      <div class="field">
-        <label>ملاحظات <span class="hint">(اختياري)</span></label>
-        <textarea id="employee-request-notes"></textarea>
-      </div>
-      <button class="btn btn-primary btn-sm" id="employee-submit-request-btn" type="button">إرسال الطلب</button>
-    </div>
-
-    <div class="card" style="margin-top:16px;">
-      <h2>طلباتي</h2>
-      <div id="employee-my-requests"><p class="hint">جارٍ التحميل...</p></div>
-    </div>
-  </main>
 </div>
 
 <div class="app" id="app-shell" style="display:none;">
@@ -4094,20 +4001,14 @@ function showAuthError(msg){
 }
 
 function routeByRole(role){
-  document.getElementById('app-shell').style.display = 'none';
-  document.getElementById('manager-shell').style.display = 'none';
-  document.getElementById('employee-shell').style.display = 'none';
   if(role==='hr' || role==='admin'){
     document.getElementById('app-shell').style.display = '';
     initHrAdminApp();
-  } else if(role==='manager'){
-    document.getElementById('manager-shell').style.display = '';
-    document.getElementById('manager-name-label').textContent = currentProfile.full_name || '';
-    initManagerView();
   } else {
-    document.getElementById('employee-shell').style.display = '';
-    document.getElementById('employee-name-label').textContent = currentProfile.full_name || 'مرحباً';
-    initEmployeeView();
+    // Employee/manager accounts use the dedicated mobile app now — this web
+    // system is HR-only. Sign them back out rather than showing an empty shell.
+    showAuthError('هذا الحساب مخصَّص لتطبيق الجوال (الحضور والانصراف والطلبات والموافقات) — يرجى استخدام التطبيق بدل هذه الصفحة. للوصول إلى نظام الموارد البشرية، استخدم حساب HR أو مدير النظام.');
+    sbClient.auth.signOut();
   }
 }
 
@@ -4121,7 +4022,9 @@ async function handleAuthedSession(session){
     return;
   }
   currentProfile = profile;
-  document.getElementById('auth-login-overlay').style.display = 'none';
+  if(profile.role==='hr' || profile.role==='admin'){
+    document.getElementById('auth-login-overlay').style.display = 'none';
+  }
   routeByRole(profile.role);
 }
 
@@ -4148,8 +4051,6 @@ async function logoutCurrentUser(){
   if(sbClient) await sbClient.auth.signOut();
   location.reload();
 }
-document.getElementById('manager-logout-btn').addEventListener('click', logoutCurrentUser);
-document.getElementById('employee-logout-btn').addEventListener('click', logoutCurrentUser);
 
 async function bootstrapAuth(){
   if(!sbClient){
@@ -4162,140 +4063,6 @@ async function bootstrapAuth(){
 }
 bootstrapAuth();
 
-/* ======================= MANAGER VIEW LOGIC ======================= */
-async function initManagerView(){
-  const box = document.getElementById('manager-requests-list');
-  box.innerHTML = '<p class="hint">جارٍ التحميل...</p>';
-  try{
-    const [leaveRes, claimRes] = await Promise.all([
-      sbClient.from('leave_requests').select('id, employee_id, type, from_date, to_date, notes, status, requested_at, employees(name, code)').eq('status','pending').order('requested_at', { ascending:true }),
-      sbClient.from('claim_requests').select('id, employee_id, claim_type, amount, notes, status, requested_at, employees(name, code)').eq('status','pending').order('requested_at', { ascending:true }),
-    ]);
-    if(leaveRes.error) throw leaveRes.error;
-    if(claimRes.error) throw claimRes.error;
-    const leaveRows = (leaveRes.data||[]).map(r=>({ kind:'leave', ...r }));
-    const claimRows = (claimRes.data||[]).map(r=>({ kind:'claim', ...r }));
-    const all = leaveRows.concat(claimRows);
-    if(all.length===0){ box.innerHTML = '<p class="hint">لا توجد طلبات بانتظار موافقتك حالياً.</p>'; return; }
-    box.innerHTML = all.map(r=>{
-      const empName = r.employees ? `${r.employees.name} (${r.employees.code})` : '—';
-      const desc = r.kind==='leave'
-        ? `طلب إجازة ${LEAVE_TYPE_LABELS_AR[r.type]||r.type} من ${r.from_date} إلى ${r.to_date}`
-        : `طلب مستحقات: ${r.claim_type}${r.amount!=null ? ' — ' + r.amount : ''}`;
-      return `
-      <div class="variance-row">
-        <div class="vinfo">
-          <div class="vtype">${empName} <span class="badge neu">${desc}</span></div>
-          <div class="vdetail">${r.notes ? r.notes : ''}</div>
-        </div>
-        <div class="vactions">
-          <button class="btn btn-ghost btn-sm" onclick="decideManagerRequest('${r.kind}','${r.id}','approved')">موافقة</button>
-          <button class="btn btn-danger" onclick="decideManagerRequest('${r.kind}','${r.id}','rejected')">رفض</button>
-        </div>
-      </div>`;
-    }).join('');
-  }catch(e){
-    box.innerHTML = '<p class="hint">تعذّر تحميل الطلبات.</p>';
-  }
-}
-const LEAVE_TYPE_LABELS_AR = { annual:'سنوية', casual:'اضطرارية', sick:'مرضية', unpaid:'بدون مرتب' };
-async function decideManagerRequest(kind, id, decision){
-  const table = kind==='leave' ? 'leave_requests' : 'claim_requests';
-  const { error } = await sbClient.from(table).update({
-    status: decision, decided_by: currentAuthUser.id, decided_at: new Date().toISOString()
-  }).eq('id', id);
-  if(error){ alert('تعذّر تنفيذ العملية'); return; }
-  initManagerView();
-}
-
-/* ======================= EMPLOYEE SELF-SERVICE VIEW LOGIC ======================= */
-function initEmployeeView(){
-  loadMyRequests();
-  const kindSel = document.getElementById('employee-request-kind');
-  kindSel.addEventListener('change', updateEmployeeRequestFormVisibility);
-  updateEmployeeRequestFormVisibility();
-  document.getElementById('employee-checkin-btn').addEventListener('click', ()=>submitAttendance('check_in'));
-  document.getElementById('employee-checkout-btn').addEventListener('click', ()=>submitAttendance('check_out'));
-  document.getElementById('employee-submit-request-btn').addEventListener('click', submitEmployeeRequest);
-}
-function updateEmployeeRequestFormVisibility(){
-  const isLeave = document.getElementById('employee-request-kind').value==='leave';
-  document.getElementById('employee-leave-type-field').style.display = isLeave ? '' : 'none';
-  document.getElementById('employee-leave-dates-row').style.display = isLeave ? '' : 'none';
-  document.getElementById('employee-claim-type-field').style.display = isLeave ? 'none' : '';
-  document.getElementById('employee-claim-amount-field').style.display = isLeave ? 'none' : '';
-}
-function submitAttendance(type){
-  const statusEl = document.getElementById('employee-attendance-status');
-  if(!navigator.geolocation){ statusEl.textContent = 'المتصفح لا يدعم تحديد الموقع.'; return; }
-  statusEl.textContent = 'جارٍ تحديد موقعك...';
-  navigator.geolocation.getCurrentPosition(async function(pos){
-    try{
-      const { data, error } = await sbClient.rpc('record_attendance', {
-        p_type: type,
-        p_lat: pos.coords.latitude,
-        p_lng: pos.coords.longitude,
-        p_accuracy: pos.coords.accuracy,
-        p_device_info: navigator.userAgent
-      });
-      if(error) throw error;
-      let msg = type==='check_in' ? 'تم تسجيل الحضور.' : 'تم تسجيل الانصراف.';
-      if(data && data.within_geofence===false) msg += ' ملاحظة: موقعك خارج النطاق المحدد — سيراجعها قسم الموارد البشرية.';
-      statusEl.textContent = msg;
-    }catch(e){
-      statusEl.textContent = 'تعذّر تسجيل الحضور: ' + (e && e.message ? e.message : 'خطأ غير معروف');
-    }
-  }, function(){
-    statusEl.textContent = 'تعذّر الحصول على موقعك — تأكد من السماح بالوصول للموقع الجغرافي.';
-  }, { enableHighAccuracy:true, timeout:15000 });
-}
-async function submitEmployeeRequest(){
-  const kind = document.getElementById('employee-request-kind').value;
-  const notes = document.getElementById('employee-request-notes').value.trim();
-  const employeeId = currentProfile.employee_id;
-  if(!employeeId){ alert('حسابك غير مرتبط بسجل موظف — راجع الموارد البشرية'); return; }
-  try{
-    if(kind==='leave'){
-      const type = document.getElementById('employee-leave-type').value;
-      const from = document.getElementById('employee-leave-from').value;
-      const to = document.getElementById('employee-leave-to').value;
-      if(!from || !to){ alert('يرجى تحديد نطاق التاريخ'); return; }
-      const { error } = await sbClient.from('leave_requests').insert({ employee_id: employeeId, type, from_date: from, to_date: to, notes });
-      if(error) throw error;
-    } else {
-      const claimType = document.getElementById('employee-claim-type').value.trim();
-      const amount = document.getElementById('employee-claim-amount').value;
-      if(!claimType){ alert('يرجى كتابة نوع المستحقات'); return; }
-      const { error } = await sbClient.from('claim_requests').insert({ employee_id: employeeId, claim_type: claimType, amount: amount || null, notes });
-      if(error) throw error;
-    }
-    document.getElementById('employee-request-notes').value = '';
-    loadMyRequests();
-    alert('تم إرسال طلبك بنجاح، بانتظار موافقة مديرك المباشر.');
-  }catch(e){
-    alert('تعذّر إرسال الطلب');
-  }
-}
-async function loadMyRequests(){
-  const box = document.getElementById('employee-my-requests');
-  const employeeId = currentProfile.employee_id;
-  if(!employeeId){ box.innerHTML = '<p class="hint">حسابك غير مرتبط بسجل موظف.</p>'; return; }
-  box.innerHTML = '<p class="hint">جارٍ التحميل...</p>';
-  const STATUS_LABELS = { pending:'قيد الانتظار', approved:'مُعتمدة', rejected:'مرفوضة', cancelled:'ملغاة' };
-  try{
-    const [leaveRes, claimRes] = await Promise.all([
-      sbClient.from('leave_requests').select('id, type, from_date, to_date, status, requested_at').eq('employee_id', employeeId).order('requested_at', { ascending:false }),
-      sbClient.from('claim_requests').select('id, claim_type, amount, status, requested_at').eq('employee_id', employeeId).order('requested_at', { ascending:false }),
-    ]);
-    if(leaveRes.error) throw leaveRes.error;
-    if(claimRes.error) throw claimRes.error;
-    const rows = (leaveRes.data||[]).map(r=>`إجازة ${LEAVE_TYPE_LABELS_AR[r.type]||r.type}: ${r.from_date} → ${r.to_date} — <span class="badge neu">${STATUS_LABELS[r.status]||r.status}</span>`)
-      .concat((claimRes.data||[]).map(r=>`مستحقات: ${r.claim_type}${r.amount!=null?' ('+r.amount+')':''} — <span class="badge neu">${STATUS_LABELS[r.status]||r.status}</span>`));
-    box.innerHTML = rows.length ? rows.map(r=>`<div class="variance-row"><div class="vinfo"><div class="vtype">${r}</div></div></div>`).join('') : '<p class="hint">لا توجد طلبات سابقة.</p>';
-  }catch(e){
-    box.innerHTML = '<p class="hint">تعذّر تحميل الطلبات.</p>';
-  }
-}
 </script>
 </body>
 </html>
