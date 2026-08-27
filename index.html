@@ -484,12 +484,13 @@
 </head>
 <body>
 
-<!-- ======================= AUTH: LOGIN GATE ======================= -->
+<!-- ======================= AUTH: LOGIN / SIGN UP GATE ======================= -->
 <div class="auth-overlay" id="auth-login-overlay">
   <div class="auth-box">
     <div class="brand-mark" style="margin:0 auto 14px;">سجل</div>
-    <h2 style="text-align:center;margin-bottom:4px;">تسجيل الدخول</h2>
+    <h2 style="text-align:center;margin-bottom:4px;" id="auth-title">تسجيل الدخول</h2>
     <p class="hint" style="text-align:center;margin-bottom:18px;">نظام سِجِلّ لإدارة الحضور والانصراف</p>
+
     <form id="auth-login-form">
       <div class="field">
         <label>البريد الإلكتروني</label>
@@ -501,6 +502,29 @@
       </div>
       <div id="auth-error" style="color:var(--rust);font-size:12.8px;margin-bottom:10px;display:none;"></div>
       <button type="submit" class="btn btn-primary" style="width:100%;" id="auth-login-btn">دخول</button>
+      <button type="button" class="btn btn-ghost" style="width:100%;margin-top:8px;" id="auth-show-signup-btn">إنشاء حساب جديد</button>
+    </form>
+
+    <form id="auth-signup-form" style="display:none;">
+      <div class="field">
+        <label>اسم الشركة</label>
+        <input id="signup-company-name" required>
+      </div>
+      <div class="field">
+        <label>اسمك الكامل</label>
+        <input id="signup-full-name" required>
+      </div>
+      <div class="field">
+        <label>البريد الإلكتروني</label>
+        <input type="email" id="signup-email" required autocomplete="username">
+      </div>
+      <div class="field">
+        <label>كلمة المرور <span class="hint">(8 أحرف على الأقل)</span></label>
+        <input type="password" id="signup-password" required autocomplete="new-password">
+      </div>
+      <div id="signup-error" style="color:var(--rust);font-size:12.8px;margin-bottom:10px;display:none;"></div>
+      <button type="submit" class="btn btn-primary" style="width:100%;" id="auth-signup-btn">إنشاء الحساب</button>
+      <button type="button" class="btn btn-ghost" style="width:100%;margin-top:8px;" id="auth-show-login-btn">لديك حساب؟ تسجيل الدخول</button>
     </form>
   </div>
 </div>
@@ -1000,13 +1024,8 @@
 
       <div class="card" style="margin-top:18px;">
         <h2>المزامنة التلقائية (Supabase)</h2>
-        <p class="hint" style="margin:-4px 0 12px;">كل تعديل يُرفع تلقائياً خلال ثوانٍ إلى Supabase، ويصل تلقائياً لأي جهاز آخر يستخدم نفس المعرّف أدناه بمجرد أن يتصل بالإنترنت — بلا أي خطوة يدوية. البيانات المحلية على هذا الجهاز تبقى المصدر الذي يعمل عليه النظام فوراً، ولن يتأثر عمله إن انقطع الاتصال بالإنترنت مؤقتاً؛ ستُستكمل المزامنة تلقائياً عند عودته.</p>
-        <div class="field">
-          <label>معرّف المزامنة</label>
-          <input id="sb-sync-id" placeholder="default">
-          <span class="hint">استخدم نفس المعرّف بالضبط على كل جهاز تريد مزامنته مع هذه النسخة</span>
-        </div>
-        <button class="btn btn-ghost btn-sm" id="sb-pull-btn" type="button" style="margin-top:4px;">فرض السحب من Supabase الآن</button>
+        <p class="hint" style="margin:-4px 0 12px;">كل تعديل يُرفع تلقائياً خلال ثوانٍ إلى Supabase، ويصل تلقائياً لأي جهاز آخر مسجّل بحساب من نفس شركتك بمجرد أن يتصل بالإنترنت — بلا أي خطوة يدوية أو معرّف تختاره. البيانات المحلية على هذا الجهاز تبقى المصدر الذي يعمل عليه النظام فوراً، ولن يتأثر عمله إن انقطع الاتصال بالإنترنت مؤقتاً؛ ستُستكمل المزامنة تلقائياً عند عودته.</p>
+        <button class="btn btn-ghost btn-sm" id="sb-pull-btn" type="button">فرض السحب من Supabase الآن</button>
         <div class="hint" id="sb-sync-status" style="margin-top:10px;">جارٍ التحقق من حالة المزامنة...</div>
       </div>
 
@@ -1248,14 +1267,13 @@ const storage = {
 
 /* ---- Supabase backup/sync (optional — LocalStorage stays primary) ----
    The whole app reads/writes exclusively through `storage` above (backed by
-   LocalStorage), so nothing else changes. This module only mirrors every
-   'sijil_*' LocalStorage key to a single row in Supabase, so the data can be
-   restored on this device or pulled onto another device sharing the same
-   sync id. If Supabase is unreachable, the app keeps working normally. */
+   LocalStorage), so nothing else changes. This module mirrors every
+   'sijil_*' LocalStorage key to a single row in Supabase per company, keyed
+   automatically by the logged-in user's own company_id — no manual sync id
+   to configure. If Supabase is unreachable, the app keeps working normally. */
 const SUPABASE_URL = 'https://olbzltitrwskzcycvfwm.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9sYnpsdGl0cndza3pjeWN2ZndtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2NzI4MDksImV4cCI6MjEwMzI0ODgwOX0.dD03kDX__xZP9cZyaOrvpcd3X-WOEgJmtD6DXdyZiJQ';
 const SIJIL_BACKUP_TABLE = 'sijil_backups';
-const LS_SYNC_ID = 'sijil_supabase_sync_id_v1';
 const LS_LAST_APPLIED_REMOTE = 'sijil_last_applied_remote_v1'; // updated_at of the remote row this device's data currently matches
 const LS_DIRTY = 'sijil_local_dirty_v1'; // '1' whenever this device has local changes not yet pushed
 
@@ -1266,16 +1284,9 @@ try{
   }
 }catch(e){ sbClient = null; }
 
-function getSyncId(){
-  const el = document.getElementById('sb-sync-id');
-  const fromField = el ? el.value.trim() : '';
-  return fromField || localStorage.getItem(LS_SYNC_ID) || 'default';
-}
-function setSyncId(v){ localStorage.setItem(LS_SYNC_ID, (v||'').trim() || 'default'); }
-
 function collectSijilSnapshot(){
   const data = {};
-  const skip = [LS_SYNC_ID, LS_LAST_APPLIED_REMOTE, LS_DIRTY];
+  const skip = [LS_LAST_APPLIED_REMOTE, LS_DIRTY];
   for(let i=0;i<localStorage.length;i++){
     const k = localStorage.key(i);
     if(k && k.indexOf('sijil_')===0 && skip.indexOf(k)===-1) data[k] = localStorage.getItem(k);
@@ -1284,7 +1295,7 @@ function collectSijilSnapshot(){
 }
 // Restores a previously-collected snapshot back into LocalStorage.
 function applySijilSnapshot(data){
-  const skip = [LS_SYNC_ID, LS_LAST_APPLIED_REMOTE, LS_DIRTY];
+  const skip = [LS_LAST_APPLIED_REMOTE, LS_DIRTY];
   Object.keys(data||{}).forEach(k=>{
     if(k.indexOf('sijil_')===0 && skip.indexOf(k)===-1) localStorage.setItem(k, data[k]);
   });
@@ -1314,9 +1325,11 @@ window.addEventListener('pagehide', function(){
 
 async function pushBackupToSupabase(silent){
   if(!sbClient){ if(!silent) toast('تعذّر الاتصال بمكتبة Supabase — تحقق من الاتصال بالإنترنت'); return; }
+  if(!currentProfile || !currentProfile.company_id) return; // not logged in yet
   try{
-    const payload = { id: getSyncId(), data: collectSijilSnapshot(), updated_at: new Date().toISOString() };
-    const { error } = await sbClient.from(SIJIL_BACKUP_TABLE).upsert(payload, { onConflict:'id' });
+    const companyId = currentProfile.company_id;
+    const payload = { id: companyId, company_id: companyId, data: collectSijilSnapshot(), updated_at: new Date().toISOString() };
+    const { error } = await sbClient.from(SIJIL_BACKUP_TABLE).upsert(payload, { onConflict:'company_id' });
     if(error) throw error;
     // Local data now exactly matches what was just pushed, so it's no
     // longer "ahead of" Supabase and no longer needs a manual merge.
@@ -1332,11 +1345,12 @@ async function pushBackupToSupabase(silent){
 
 async function pullBackupFromSupabase(){
   if(!sbClient){ toast('تعذّر الاتصال بمكتبة Supabase — تحقق من الاتصال بالإنترنت'); return; }
-  if(!confirm('سيتم استبدال كل البيانات المحلية الحالية على هذا الجهاز بالنسخة المخزَّنة في Supabase بنفس المعرّف. هل تريد المتابعة؟')) return;
+  if(!currentProfile || !currentProfile.company_id) return;
+  if(!confirm('سيتم استبدال كل البيانات المحلية الحالية على هذا الجهاز بنسخة شركتك المخزَّنة في Supabase. هل تريد المتابعة؟')) return;
   try{
-    const { data, error } = await sbClient.from(SIJIL_BACKUP_TABLE).select('data, updated_at').eq('id', getSyncId()).maybeSingle();
+    const { data, error } = await sbClient.from(SIJIL_BACKUP_TABLE).select('data, updated_at').eq('company_id', currentProfile.company_id).maybeSingle();
     if(error) throw error;
-    if(!data){ toast('لا توجد نسخة احتياطية محفوظة بهذا المعرّف بعد'); return; }
+    if(!data){ toast('لا توجد نسخة احتياطية محفوظة لشركتك بعد'); return; }
     applySijilSnapshot(data.data);
     localStorage.setItem(LS_LAST_APPLIED_REMOTE, data.updated_at);
     clearSijilDirty();
@@ -1349,11 +1363,12 @@ async function pullBackupFromSupabase(){
 
 async function refreshSyncStatusDisplay(){
   if(!sbClient){ setSyncStatus('تعذّر تحميل مكتبة Supabase — تحقق من الاتصال بالإنترنت.'); return; }
+  if(!currentProfile || !currentProfile.company_id) return;
   setSyncStatus('جارٍ التحقق من حالة المزامنة...');
   try{
-    const { data, error } = await sbClient.from(SIJIL_BACKUP_TABLE).select('updated_at').eq('id', getSyncId()).maybeSingle();
+    const { data, error } = await sbClient.from(SIJIL_BACKUP_TABLE).select('updated_at').eq('company_id', currentProfile.company_id).maybeSingle();
     if(error) throw error;
-    if(!data){ setSyncStatus('لا توجد نسخة احتياطية محفوظة بعد بهذا المعرّف.'); return; }
+    if(!data){ setSyncStatus('لا توجد نسخة احتياطية محفوظة بعد لشركتك.'); return; }
     if(isSijilDirty()){
       setSyncStatus('لديك تعديلات محلية على هذا الجهاز — سيتم رفعها تلقائياً خلال ثوانٍ (آخر نسخة على Supabase: ' + formatSyncTime(data.updated_at) + ')');
     } else {
@@ -1372,8 +1387,9 @@ async function refreshSyncStatusDisplay(){
 // silently — it only surfaces a status message so the admin can decide.
 async function checkForRemoteUpdatesOnLoad(){
   if(!sbClient) return;
+  if(!currentProfile || !currentProfile.company_id) return;
   try{
-    const { data, error } = await sbClient.from(SIJIL_BACKUP_TABLE).select('data, updated_at').eq('id', getSyncId()).maybeSingle();
+    const { data, error } = await sbClient.from(SIJIL_BACKUP_TABLE).select('data, updated_at').eq('company_id', currentProfile.company_id).maybeSingle();
     if(error || !data) return;
     const lastApplied = localStorage.getItem(LS_LAST_APPLIED_REMOTE);
     const remoteIsNewer = !lastApplied || new Date(data.updated_at) > new Date(lastApplied);
@@ -1395,12 +1411,9 @@ async function checkForRemoteUpdatesOnLoad(){
 }
 
 function initSupabaseSyncSettings(){
-  const idInput = document.getElementById('sb-sync-id');
   const pullBtn = document.getElementById('sb-pull-btn');
-  idInput.value = localStorage.getItem(LS_SYNC_ID) || 'default';
   if(!pullBtn.dataset.bound){
     pullBtn.dataset.bound = '1';
-    idInput.addEventListener('input', function(){ setSyncId(this.value); });
     pullBtn.addEventListener('click', function(){ pullBackupFromSupabase(); });
   }
   refreshSyncStatusDisplay();
@@ -4068,15 +4081,21 @@ function showAuthError(msg){
   el.textContent = msg;
   el.style.display = 'block';
 }
+function showSignupError(msg){
+  const el = document.getElementById('signup-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
 
 function routeByRole(role){
-  if(role==='hr' || role==='admin'){
+  if(role==='owner' || role==='admin' || role==='hr'){
     document.getElementById('app-shell').style.display = '';
     initHrAdminApp();
   } else {
-    // Employee/manager accounts use the dedicated mobile app now — this web
-    // system is HR-only. Sign them back out rather than showing an empty shell.
-    showAuthError('هذا الحساب مخصَّص لتطبيق الجوال (الحضور والانصراف والطلبات والموافقات) — يرجى استخدام التطبيق بدل هذه الصفحة. للوصول إلى نظام الموارد البشرية، استخدم حساب HR أو مدير النظام.');
+    // manager/employee accounts use the dedicated mobile app now — this web
+    // system is for owner/admin/hr only. Sign them back out rather than
+    // showing an empty shell.
+    showAuthError('هذا الحساب مخصَّص لتطبيق الجوال (الحضور والانصراف والطلبات والموافقات) — يرجى استخدام التطبيق بدل هذه الصفحة.');
     sbClient.auth.signOut();
   }
 }
@@ -4084,14 +4103,14 @@ function routeByRole(role){
 async function handleAuthedSession(session){
   currentAuthUser = session.user;
   const { data: profile, error } = await sbClient.from('profiles')
-    .select('id, employee_id, role, full_name, active').eq('id', currentAuthUser.id).maybeSingle();
+    .select('id, employee_id, role, full_name, active, company_id').eq('id', currentAuthUser.id).maybeSingle();
   if(error || !profile || !profile.active){
-    showAuthError('هذا الحساب غير مفعّل أو غير مرتبط بصلاحية — يرجى مراجعة الموارد البشرية');
+    showAuthError('هذا الحساب غير مفعّل أو غير مرتبط بصلاحية — يرجى مراجعة إدارة شركتك');
     await sbClient.auth.signOut();
     return;
   }
   currentProfile = profile;
-  if(profile.role==='hr' || profile.role==='admin'){
+  if(profile.role==='owner' || profile.role==='admin' || profile.role==='hr'){
     document.getElementById('auth-login-overlay').style.display = 'none';
   }
   routeByRole(profile.role);
@@ -4113,6 +4132,48 @@ document.getElementById('auth-login-form').addEventListener('submit', async func
     showAuthError('تعذّر تسجيل الدخول — تحقق من البريد وكلمة المرور');
   }finally{
     btn.disabled = false; btn.textContent = 'دخول';
+  }
+});
+
+// Toggle between the login form and the "create a new company account" form.
+document.getElementById('auth-show-signup-btn').addEventListener('click', function(){
+  document.getElementById('auth-title').textContent = 'إنشاء حساب جديد';
+  document.getElementById('auth-login-form').style.display = 'none';
+  document.getElementById('auth-signup-form').style.display = '';
+});
+document.getElementById('auth-show-login-btn').addEventListener('click', function(){
+  document.getElementById('auth-title').textContent = 'تسجيل الدخول';
+  document.getElementById('auth-signup-form').style.display = 'none';
+  document.getElementById('auth-login-form').style.display = '';
+});
+
+document.getElementById('auth-signup-form').addEventListener('submit', async function(e){
+  e.preventDefault();
+  const companyName = document.getElementById('signup-company-name').value.trim();
+  const fullName = document.getElementById('signup-full-name').value.trim();
+  const email = document.getElementById('signup-email').value.trim();
+  const password = document.getElementById('signup-password').value;
+  const btn = document.getElementById('auth-signup-btn');
+  document.getElementById('signup-error').style.display = 'none';
+  if(!sbClient){ showSignupError('تعذّر تحميل مكتبة الدخول — تحقق من الاتصال بالإنترنت'); return; }
+  if(password.length < 8){ showSignupError('كلمة المرور يجب ألا تقل عن 8 أحرف'); return; }
+  btn.disabled = true; btn.textContent = 'جارٍ إنشاء الحساب...';
+  try{
+    const res = await fetch(SUPABASE_URL + '/functions/v1/signup-company', {
+      method:'POST',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify({ company_name: companyName, owner_full_name: fullName, email, password })
+    });
+    const json = await res.json();
+    if(!res.ok || json.error) throw new Error(json.error || 'خطأ غير معروف');
+    // Log the new owner straight in — no separate email-confirmation step.
+    const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
+    if(error) throw error;
+    await handleAuthedSession(data.session);
+  }catch(err){
+    showSignupError('تعذّر إنشاء الحساب: ' + (err && err.message ? err.message : 'خطأ غير معروف'));
+  }finally{
+    btn.disabled = false; btn.textContent = 'إنشاء الحساب';
   }
 });
 
