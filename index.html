@@ -1027,8 +1027,50 @@
       </div>
 
       <div class="card" style="margin-top:18px;">
+        <h2>مواقع حضور الموظفين (النطاق الجغرافي)</h2>
+        <p class="hint" style="margin:-4px 0 12px;">تحديد نطاق الحضور الجغرافي لكل موظف مستقل تمامًا عن إنشاء حساب دخول له — يمكنك ضبط موقع أي موظف هنا سواء أنشأتم له حساب دخول لاحقًا أم لا.</p>
+        <div class="field">
+          <label>اختر موظفًا</label>
+          <select id="geo-employee-select"><option value="">— اختر موظفاً —</option></select>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>نمط الحضور</label>
+            <select id="geo-attendance-mode">
+              <option value="geofenced">بنطاق جغرافي محدد</option>
+              <option value="field">عمل ميداني (تسجيل الموقع بلا نطاق)</option>
+            </select>
+          </div>
+          <div class="field" id="geo-radius-field">
+            <label>نصف قطر النطاق (متر)</label>
+            <input type="number" id="geo-radius" placeholder="مثال: 120">
+          </div>
+        </div>
+        <div class="form-row" id="geo-latlng-row">
+          <div class="field">
+            <label>خط العرض (Latitude)</label>
+            <input type="number" step="any" id="geo-lat">
+          </div>
+          <div class="field">
+            <label>خط الطول (Longitude)</label>
+            <input type="number" step="any" id="geo-lng">
+          </div>
+        </div>
+        <div id="geo-pickers" style="display:flex;gap:10px;flex-wrap:wrap;margin:-4px 0 14px;">
+          <button class="btn btn-ghost btn-sm" id="geo-use-gps-btn" type="button">استخدام موقعي الحالي (GPS)</button>
+          <button class="btn btn-ghost btn-sm" id="geo-pick-map-btn" type="button">اختيار من الخريطة</button>
+        </div>
+        <div class="field">
+          <label>المدير المباشر <span class="hint">(اختياري)</span></label>
+          <select id="geo-manager"><option value="">— بلا مدير مباشر —</option></select>
+        </div>
+        <button class="btn btn-primary btn-sm" id="geo-save-btn" type="button" disabled>حفظ</button>
+        <div class="hint" id="geo-save-status" style="margin-top:10px;"></div>
+      </div>
+
+      <div class="card" style="margin-top:18px;">
         <h2>إدارة الحسابات (حضور، إجازات، موافقات)</h2>
-        <p class="hint" style="margin:-4px 0 12px;">أنشئ حساب دخول لكل موظف ليتمكن من تسجيل حضوره وانصرافه وطلب الإجازات/المستحقات من جهازه، أو حساب مدير مباشر ليوافق على طلبات فريقه. البريد وكلمة المرور المؤقتة يُرسَلان للموظف مباشرة من قِبَلكم — النظام لا يرسل بريدًا تلقائيًا.</p>
+        <p class="hint" style="margin:-4px 0 12px;">أنشئ حساب دخول لتطبيق الجوال فقط للموظفين والمديرين الذين يحتاجونه فعليًا — هذا اختياري ومنفصل تمامًا عن ضبط موقع الحضور أعلاه. البريد وكلمة المرور المؤقتة يُرسَلان للموظف مباشرة من قِبَلكم — النظام لا يرسل بريدًا تلقائيًا.</p>
         <div class="field">
           <label>اختر من الموظفين المُزامَنين <span class="hint">(اختياري — أو اترك على "موظف جديد" واملأ الاسم/الرقم الوظيفي يدوياً)</span></label>
           <select id="acc-existing-employee"><option value="">— موظف جديد —</option></select>
@@ -1053,47 +1095,14 @@
             <input id="acc-temp-password" placeholder="8 أحرف على الأقل">
           </div>
         </div>
-        <div class="form-row">
-          <div class="field">
-            <label>الصلاحية</label>
-            <select id="acc-role">
-              <option value="employee">موظف</option>
-              <option value="manager">مدير مباشر</option>
-              <option value="hr">موارد بشرية</option>
-              <option value="admin">مدير النظام</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>المدير المباشر <span class="hint">(اختياري)</span></label>
-            <select id="acc-manager"><option value="">— بلا مدير مباشر —</option></select>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="field">
-            <label>نمط الحضور</label>
-            <select id="acc-attendance-mode">
-              <option value="geofenced">بنطاق جغرافي محدد</option>
-              <option value="field">عمل ميداني (تسجيل الموقع بلا نطاق)</option>
-            </select>
-          </div>
-          <div class="field" id="acc-geofence-radius-field">
-            <label>نصف قطر النطاق (متر)</label>
-            <input type="number" id="acc-geofence-radius" placeholder="مثال: 120">
-          </div>
-        </div>
-        <div class="form-row" id="acc-geofence-latlng-row">
-          <div class="field">
-            <label>خط العرض (Latitude)</label>
-            <input type="number" step="any" id="acc-geofence-lat">
-          </div>
-          <div class="field">
-            <label>خط الطول (Longitude)</label>
-            <input type="number" step="any" id="acc-geofence-lng">
-          </div>
-        </div>
-        <div id="acc-geofence-pickers" style="display:flex;gap:10px;flex-wrap:wrap;margin:-4px 0 14px;">
-          <button class="btn btn-ghost btn-sm" id="acc-use-gps-btn" type="button">استخدام موقعي الحالي (GPS)</button>
-          <button class="btn btn-ghost btn-sm" id="acc-pick-map-btn" type="button">اختيار من الخريطة</button>
+        <div class="field">
+          <label>الصلاحية</label>
+          <select id="acc-role">
+            <option value="employee">موظف</option>
+            <option value="manager">مدير مباشر</option>
+            <option value="hr">موارد بشرية</option>
+            <option value="admin">مدير النظام</option>
+          </select>
         </div>
         <button class="btn btn-primary btn-sm" id="acc-create-btn" type="button">إنشاء الحساب</button>
         <div class="hint" id="acc-create-status" style="margin-top:10px;"></div>
@@ -2491,13 +2500,15 @@ function renderSettingsView(){
   initIntervalRuleSettings();
   initScheduleOverrideSettings();
   initSupabaseSyncSettings();
+  initGeoLocationSettings();
   initAccountManagementSettings();
 }
 
-/* ---- Account management (create login accounts via secure Edge Function) ----
-   `public.employees` (Supabase) is now kept as a mirror of the LocalStorage
-   employee list via the migration button below, matched by employee code,
-   so both systems share the same roster instead of drifting apart. */
+/* ---- Employee roster sync + geolocation management ----
+   `public.employees` (Supabase) is kept as a mirror of the LocalStorage
+   employee list via the migration button below, matched by employee code.
+   Setting each employee's geofence location/manager here is completely
+   independent of whether that employee ever gets a login account. */
 async function migrateLocalEmployeesToSupabase(){
   const statusEl = document.getElementById('acc-migrate-status');
   if(!sbClient){ statusEl.textContent = 'تعذّر الاتصال بـ Supabase'; return; }
@@ -2514,96 +2525,133 @@ async function migrateLocalEmployeesToSupabase(){
     }));
     const { error } = await sbClient.from('employees').upsert(rows, { onConflict:'code' });
     if(error) throw error;
-    statusEl.textContent = `تمت مزامنة ${rows.length} موظف بنجاح. يمكنك الآن اختيارهم عند إنشاء الحسابات أدناه.`;
-    refreshAccountManagerOptions();
+    statusEl.textContent = `تمت مزامنة ${rows.length} موظف بنجاح. يمكنك الآن ضبط مواقعهم وإنشاء حسابات لهم أدناه.`;
+    refreshGeoEmployeeOptions();
     refreshExistingEmployeeOptions();
   }catch(e){
     statusEl.textContent = 'تعذّرت المزامنة: ' + (e && e.message ? e.message : 'خطأ غير معروف');
   }
 }
-async function refreshAccountManagerOptions(){
-  const sel = document.getElementById('acc-manager');
+
+/* ---- Geolocation panel: set attendance_mode/geofence/manager per employee, no login required ---- */
+async function refreshGeoEmployeeOptions(){
+  const sel = document.getElementById('geo-employee-select');
   if(!sbClient) return;
   try{
     const { data, error } = await sbClient.from('employees').select('id, name, code').order('name');
     if(error) throw error;
     const current = sel.value;
-    sel.innerHTML = '<option value="">— بلا مدير مباشر —</option>' + (data||[]).map(e=>`<option value="${e.id}">${e.name} (${e.code})</option>`).join('');
+    sel.innerHTML = '<option value="">— اختر موظفاً —</option>' + (data||[]).map(e=>`<option value="${e.id}">${e.name} (${e.code})</option>`).join('');
     sel.value = current;
   }catch(e){ /* silent — non-critical */ }
 }
-// Employees synced from LocalStorage but not yet linked to a login account —
-// picking one here avoids creating a duplicate `employees` row.
-async function refreshExistingEmployeeOptions(){
-  const sel = document.getElementById('acc-existing-employee');
+async function refreshGeoManagerOptions(excludeEmployeeId){
+  const sel = document.getElementById('geo-manager');
   if(!sbClient) return;
   try{
-    const { data, error } = await sbClient
-      .from('employees')
-      .select('id, name, code, profiles(id)')
-      .order('name');
+    const { data, error } = await sbClient.from('employees').select('id, name, code').order('name');
     if(error) throw error;
-    const unlinked = (data||[]).filter(e=> !e.profiles || e.profiles.length===0);
     const current = sel.value;
-    sel.innerHTML = '<option value="">— موظف جديد —</option>' + unlinked.map(e=>`<option value="${e.id}" data-name="${e.name}" data-code="${e.code}">${e.name} (${e.code})</option>`).join('');
+    const options = (data||[]).filter(e=> e.id !== excludeEmployeeId);
+    sel.innerHTML = '<option value="">— بلا مدير مباشر —</option>' + options.map(e=>`<option value="${e.id}">${e.name} (${e.code})</option>`).join('');
     sel.value = current;
   }catch(e){ /* silent — non-critical */ }
 }
-function initAccountManagementSettings(){
-  const modeSel = document.getElementById('acc-attendance-mode');
-  const radiusField = document.getElementById('acc-geofence-radius-field');
-  const latlngRow = document.getElementById('acc-geofence-latlng-row');
-  const pickersRow = document.getElementById('acc-geofence-pickers');
-  function syncGeoFields(){
-    const isField = modeSel.value==='field';
-    radiusField.style.display = isField ? 'none' : '';
-    latlngRow.style.display = isField ? 'none' : '';
-    pickersRow.style.display = isField ? 'none' : '';
+function syncGeoModeFields(){
+  const isField = document.getElementById('geo-attendance-mode').value==='field';
+  document.getElementById('geo-radius-field').style.display = isField ? 'none' : '';
+  document.getElementById('geo-latlng-row').style.display = isField ? 'none' : '';
+  document.getElementById('geo-pickers').style.display = isField ? 'none' : '';
+}
+async function loadGeoEmployeeSettings(){
+  const empId = document.getElementById('geo-employee-select').value;
+  const saveBtn = document.getElementById('geo-save-btn');
+  const statusEl = document.getElementById('geo-save-status');
+  statusEl.textContent = '';
+  if(!empId){
+    saveBtn.disabled = true;
+    ['geo-radius','geo-lat','geo-lng'].forEach(id=>{ document.getElementById(id).value=''; });
+    document.getElementById('geo-attendance-mode').value = 'geofenced';
+    document.getElementById('geo-manager').value = '';
+    syncGeoModeFields();
+    return;
   }
-  const existingSel = document.getElementById('acc-existing-employee');
-  const nameInput = document.getElementById('acc-full-name');
-  const codeInput = document.getElementById('acc-emp-code');
-  function syncExistingEmployeeFields(){
-    const opt = existingSel.options[existingSel.selectedIndex];
-    const picked = existingSel.value !== '';
-    if(picked){
-      nameInput.value = opt.dataset.name || '';
-      codeInput.value = opt.dataset.code || '';
-    }
-    nameInput.disabled = picked;
-    codeInput.disabled = picked;
+  saveBtn.disabled = false;
+  refreshGeoManagerOptions(empId);
+  try{
+    const { data, error } = await sbClient.from('employees')
+      .select('attendance_mode, geofence_lat, geofence_lng, geofence_radius_m, manager_id').eq('id', empId).maybeSingle();
+    if(error) throw error;
+    document.getElementById('geo-attendance-mode').value = (data && data.attendance_mode) || 'geofenced';
+    document.getElementById('geo-radius').value = data && data.geofence_radius_m!=null ? data.geofence_radius_m : '';
+    document.getElementById('geo-lat').value = data && data.geofence_lat!=null ? data.geofence_lat : '';
+    document.getElementById('geo-lng').value = data && data.geofence_lng!=null ? data.geofence_lng : '';
+    syncGeoModeFields();
+    // manager select is repopulated async above; set its value once options land
+    setTimeout(()=>{ document.getElementById('geo-manager').value = (data && data.manager_id) || ''; }, 300);
+  }catch(e){
+    statusEl.textContent = 'تعذّر تحميل بيانات هذا الموظف';
   }
-  const migrateBtn = document.getElementById('acc-migrate-btn');
-  const btn = document.getElementById('acc-create-btn');
-  const gpsBtn = document.getElementById('acc-use-gps-btn');
-  const mapBtn = document.getElementById('acc-pick-map-btn');
-  if(!btn.dataset.bound){
-    btn.dataset.bound = '1';
-    modeSel.addEventListener('change', syncGeoFields);
-    existingSel.addEventListener('change', syncExistingEmployeeFields);
-    migrateBtn.addEventListener('click', migrateLocalEmployeesToSupabase);
-    btn.addEventListener('click', createEmployeeAccount);
-    gpsBtn.addEventListener('click', useCurrentLocationForGeofence);
-    mapBtn.addEventListener('click', ()=>openMapPicker(document.getElementById('acc-geofence-lat'), document.getElementById('acc-geofence-lng')));
+}
+async function saveGeoEmployeeSettings(){
+  const empId = document.getElementById('geo-employee-select').value;
+  const statusEl = document.getElementById('geo-save-status');
+  if(!empId){ statusEl.textContent = 'يرجى اختيار موظف أولاً'; return; }
+  const mode = document.getElementById('geo-attendance-mode').value;
+  const radius = document.getElementById('geo-radius').value;
+  const lat = document.getElementById('geo-lat').value;
+  const lng = document.getElementById('geo-lng').value;
+  const managerId = document.getElementById('geo-manager').value || null;
+  if(mode==='geofenced' && (!radius || !lat || !lng)){
+    statusEl.textContent = 'يرجى تحديد نصف القطر والإحداثيات، أو التحويل إلى «عمل ميداني» إن لم يكن للموظف نطاق ثابت';
+    return;
   }
-  syncGeoFields();
-  refreshAccountManagerOptions();
-  refreshExistingEmployeeOptions();
+  statusEl.textContent = 'جارٍ الحفظ...';
+  try{
+    const { error } = await sbClient.from('employees').update({
+      attendance_mode: mode,
+      geofence_radius_m: mode==='field' ? null : radius,
+      geofence_lat: mode==='field' ? null : lat,
+      geofence_lng: mode==='field' ? null : lng,
+      manager_id: managerId,
+    }).eq('id', empId);
+    if(error) throw error;
+    statusEl.textContent = 'تم حفظ إعدادات الموقع لهذا الموظف بنجاح.';
+  }catch(e){
+    statusEl.textContent = 'تعذّر الحفظ: ' + (e && e.message ? e.message : 'خطأ غير معروف');
+  }
+}
+function initGeoLocationSettings(){
+  const empSel = document.getElementById('geo-employee-select');
+  const modeSel = document.getElementById('geo-attendance-mode');
+  const saveBtn = document.getElementById('geo-save-btn');
+  const gpsBtn = document.getElementById('geo-use-gps-btn');
+  const mapBtn = document.getElementById('geo-pick-map-btn');
+  if(!saveBtn.dataset.bound){
+    saveBtn.dataset.bound = '1';
+    empSel.addEventListener('change', loadGeoEmployeeSettings);
+    modeSel.addEventListener('change', syncGeoModeFields);
+    saveBtn.addEventListener('click', saveGeoEmployeeSettings);
+    gpsBtn.addEventListener('click', ()=>useCurrentLocationFor(document.getElementById('geo-lat'), document.getElementById('geo-lng'), gpsBtn));
+    mapBtn.addEventListener('click', ()=>openMapPicker(document.getElementById('geo-lat'), document.getElementById('geo-lng')));
+  }
+  syncGeoModeFields();
+  refreshGeoEmployeeOptions();
 }
 
-// GPS button: fills the lat/lng fields with the admin's own current
-// location (handy when standing at the workplace while creating the account).
-function useCurrentLocationForGeofence(){
+// Generic GPS button: fills any given lat/lng inputs with the admin's own
+// current location (handy when standing at the workplace being configured).
+function useCurrentLocationFor(latInput, lngInput, btn){
   if(!navigator.geolocation){ toast('المتصفح لا يدعم تحديد الموقع'); return; }
-  const btn = document.getElementById('acc-use-gps-btn');
+  const originalLabel = btn.textContent;
   btn.disabled = true; btn.textContent = 'جارٍ تحديد الموقع...';
   navigator.geolocation.getCurrentPosition(function(pos){
-    document.getElementById('acc-geofence-lat').value = pos.coords.latitude.toFixed(6);
-    document.getElementById('acc-geofence-lng').value = pos.coords.longitude.toFixed(6);
-    btn.disabled = false; btn.textContent = 'استخدام موقعي الحالي (GPS)';
+    latInput.value = pos.coords.latitude.toFixed(6);
+    lngInput.value = pos.coords.longitude.toFixed(6);
+    btn.disabled = false; btn.textContent = originalLabel;
     toast('تم تعبئة الإحداثيات من موقعك الحالي');
   }, function(){
-    btn.disabled = false; btn.textContent = 'استخدام موقعي الحالي (GPS)';
+    btn.disabled = false; btn.textContent = originalLabel;
     toast('تعذّر الحصول على موقعك — تأكد من السماح بالوصول للموقع الجغرافي');
   }, { enableHighAccuracy:true, timeout:15000 });
 }
@@ -2657,6 +2705,52 @@ document.getElementById('map-picker-confirm').addEventListener('click', function
   closeMapPicker();
   toast('تم تحديد الموقع من الخريطة');
 });
+
+/* ---- Account management (create login accounts via secure Edge Function) ----
+   Purely about login credentials now — location/manager are set separately
+   above, and are left untouched by this flow regardless of whether the
+   selected employee already has them configured. */
+// Employees synced from LocalStorage but not yet linked to a login account —
+// picking one here avoids creating a duplicate `employees` row.
+async function refreshExistingEmployeeOptions(){
+  const sel = document.getElementById('acc-existing-employee');
+  if(!sbClient) return;
+  try{
+    const { data, error } = await sbClient
+      .from('employees')
+      .select('id, name, code, profiles(id)')
+      .order('name');
+    if(error) throw error;
+    const unlinked = (data||[]).filter(e=> !e.profiles || e.profiles.length===0);
+    const current = sel.value;
+    sel.innerHTML = '<option value="">— موظف جديد —</option>' + unlinked.map(e=>`<option value="${e.id}" data-name="${e.name}" data-code="${e.code}">${e.name} (${e.code})</option>`).join('');
+    sel.value = current;
+  }catch(e){ /* silent — non-critical */ }
+}
+function initAccountManagementSettings(){
+  const existingSel = document.getElementById('acc-existing-employee');
+  const nameInput = document.getElementById('acc-full-name');
+  const codeInput = document.getElementById('acc-emp-code');
+  function syncExistingEmployeeFields(){
+    const opt = existingSel.options[existingSel.selectedIndex];
+    const picked = existingSel.value !== '';
+    if(picked){
+      nameInput.value = opt.dataset.name || '';
+      codeInput.value = opt.dataset.code || '';
+    }
+    nameInput.disabled = picked;
+    codeInput.disabled = picked;
+  }
+  const migrateBtn = document.getElementById('acc-migrate-btn');
+  const btn = document.getElementById('acc-create-btn');
+  if(!btn.dataset.bound){
+    btn.dataset.bound = '1';
+    existingSel.addEventListener('change', syncExistingEmployeeFields);
+    migrateBtn.addEventListener('click', migrateLocalEmployeesToSupabase);
+    btn.addEventListener('click', createEmployeeAccount);
+  }
+  refreshExistingEmployeeOptions();
+}
 async function createEmployeeAccount(){
   const statusEl = document.getElementById('acc-create-status');
   const existingEmployeeId = document.getElementById('acc-existing-employee').value || null;
@@ -2665,11 +2759,6 @@ async function createEmployeeAccount(){
   const email = document.getElementById('acc-email').value.trim();
   const tempPassword = document.getElementById('acc-temp-password').value;
   const role = document.getElementById('acc-role').value;
-  const managerId = document.getElementById('acc-manager').value || null;
-  const mode = document.getElementById('acc-attendance-mode').value;
-  const radius = document.getElementById('acc-geofence-radius').value;
-  const lat = document.getElementById('acc-geofence-lat').value;
-  const lng = document.getElementById('acc-geofence-lng').value;
 
   if(!fullName || !email || !tempPassword){ statusEl.textContent = 'يرجى تعبئة الاسم، البريد، وكلمة المرور المؤقتة'; return; }
   if(!existingEmployeeId && !empCode){ statusEl.textContent = 'يرجى إدخال الرقم الوظيفي، أو اختيار موظف موجود من القائمة أعلاه'; return; }
@@ -2687,21 +2776,17 @@ async function createEmployeeAccount(){
       body: JSON.stringify({
         email, temp_password: tempPassword, full_name: fullName, role,
         employee_id: existingEmployeeId,
-        employee_code: empCode, employee_name: fullName, manager_id: managerId,
-        attendance_mode: mode,
-        geofence_lat: mode==='field' ? null : (lat || null),
-        geofence_lng: mode==='field' ? null : (lng || null),
-        geofence_radius_m: mode==='field' ? null : (radius || null),
+        employee_code: empCode, employee_name: fullName,
       })
     });
     const json = await res.json();
     if(!res.ok || json.error) throw new Error(json.error || 'خطأ غير معروف');
-    statusEl.textContent = 'تم إنشاء الحساب بنجاح — أرسل البريد وكلمة المرور المؤقتة للموظف بشكل آمن.';
-    ['acc-full-name','acc-emp-code','acc-email','acc-temp-password','acc-geofence-radius','acc-geofence-lat','acc-geofence-lng'].forEach(id=>{ document.getElementById(id).value = ''; });
+    statusEl.textContent = 'تم إنشاء الحساب بنجاح — أرسل البريد وكلمة المرور المؤقتة للموظف بشكل آمن. يمكنك ضبط موقع حضوره من البطاقة أعلاه إن لم يكن مضبوطاً بعد.';
+    ['acc-full-name','acc-emp-code','acc-email','acc-temp-password'].forEach(id=>{ document.getElementById(id).value = ''; });
     document.getElementById('acc-existing-employee').value = '';
     document.getElementById('acc-full-name').disabled = false;
     document.getElementById('acc-emp-code').disabled = false;
-    refreshAccountManagerOptions();
+    refreshGeoEmployeeOptions();
     refreshExistingEmployeeOptions();
   }catch(e){
     statusEl.textContent = 'تعذّر إنشاء الحساب: ' + (e && e.message ? e.message : 'خطأ غير معروف');
