@@ -1020,6 +1020,17 @@
       </div>
 
       <div class="card" style="margin-top:18px;">
+        <h2>نسخة احتياطية على ملف الكمبيوتر</h2>
+        <p class="hint" style="margin:-4px 0 12px;">تنزيل كل بيانات النظام (الموظفون، السجل، الإعدادات، القواعد، العطل...) كملف واحد تحفظه أنت أينما تريد على جهازك (فلاشة، بريد إلكتروني، مجلد آخر) — بمعزل تام عن الإنترنت أو المتصفح. يمكنك لاحقاً استيراد هذا الملف لاستعادة البيانات على هذا الجهاز أو أي جهاز آخر.</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;">
+          <button class="btn btn-primary btn-sm" id="file-backup-export-btn" type="button">تنزيل نسخة احتياطية (ملف)</button>
+          <button class="btn btn-ghost btn-sm" id="file-backup-import-btn" type="button">استيراد من ملف</button>
+          <input type="file" id="file-backup-import-input" accept="application/json,.json" style="display:none;">
+        </div>
+        <div class="hint" id="file-backup-status" style="margin-top:10px;"></div>
+      </div>
+
+      <div class="card" style="margin-top:18px;">
         <h2>مزامنة قائمة الموظفين الحالية</h2>
         <p class="hint" style="margin:-4px 0 12px;">النظام الحالي (سجل الحركات، التقارير...) يعمل على قائمة موظفين محلية منفصلة عن نظام الحسابات الجديد. اضغط الزر أدناه لنسخ كل موظف موجود حالياً (بالاسم والرقم الوظيفي وجدول الدوام) إلى نظام الحسابات، حتى تتمكن من إنشاء حساب دخول له مباشرة أدناه دون إعادة إدخال بياناته. يمكن تكرار هذا الزر بأمان في أي وقت لاحقاً — لن يُنشئ نسخاً مكررة (يُطابق حسب الرقم الوظيفي).</p>
         <button class="btn btn-primary btn-sm" id="acc-migrate-btn" type="button">مزامنة الموظفين الحاليين الآن</button>
@@ -1420,6 +1431,65 @@ function initSupabaseSyncSettings(){
     pullBtn.addEventListener('click', function(){ pullBackupFromSupabase(); });
   }
   refreshSyncStatusDisplay();
+}
+
+/* ---- Backup to a local file on the computer (independent of Supabase) ----
+   Reuses the same snapshot/restore helpers as the Supabase sync module, but
+   writes/reads an actual .json file via the browser's download/file-picker,
+   so the data lives on the admin's own machine with no network involved. */
+function exportSijilBackupToFile(){
+  try{
+    const payload = { exportedAt: new Date().toISOString(), data: collectSijilSnapshot() };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0,10);
+    a.href = url;
+    a.download = `سجل-نسخة-احتياطية-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    document.getElementById('file-backup-status').textContent = 'تم تنزيل الملف بنجاح — احفظه في مكان آمن.';
+  }catch(e){
+    document.getElementById('file-backup-status').textContent = 'تعذّر إنشاء الملف: ' + (e && e.message ? e.message : 'خطأ غير معروف');
+  }
+}
+function importSijilBackupFromFile(file){
+  const statusEl = document.getElementById('file-backup-status');
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(){
+    let parsed;
+    try{
+      parsed = JSON.parse(reader.result);
+    }catch(e){
+      statusEl.textContent = 'الملف غير صالح — تأكد أنه ملف النسخة الاحتياطية الصحيح (.json)';
+      return;
+    }
+    if(!parsed || typeof parsed.data !== 'object'){
+      statusEl.textContent = 'صيغة الملف غير متوقعة — لا يبدو ملف نسخة احتياطية صادر من هذا النظام';
+      return;
+    }
+    if(!confirm('سيتم استبدال كل البيانات المحلية الحالية على هذا الجهاز بمحتوى الملف المختار. هل تريد المتابعة؟')) return;
+    applySijilSnapshot(parsed.data);
+    markSijilDirty(); // so the next Supabase sync (if enabled) picks this up too, instead of being silently overwritten
+    statusEl.textContent = 'تم الاستيراد بنجاح — يُعاد تحميل الصفحة الآن';
+    setTimeout(()=>location.reload(), 900);
+  };
+  reader.onerror = function(){ statusEl.textContent = 'تعذّرت قراءة الملف'; };
+  reader.readAsText(file);
+}
+function initFileBackupSettings(){
+  const exportBtn = document.getElementById('file-backup-export-btn');
+  const importBtn = document.getElementById('file-backup-import-btn');
+  const importInput = document.getElementById('file-backup-import-input');
+  if(!exportBtn.dataset.bound){
+    exportBtn.dataset.bound = '1';
+    exportBtn.addEventListener('click', exportSijilBackupToFile);
+    importBtn.addEventListener('click', function(){ importInput.value = ''; importInput.click(); });
+    importInput.addEventListener('change', function(){ importSijilBackupFromFile(this.files[0]); });
+  }
 }
 
 function loadEmployees(){ return storage.getJSON(LS_EMP, []); }
@@ -2500,6 +2570,7 @@ function renderSettingsView(){
   initIntervalRuleSettings();
   initScheduleOverrideSettings();
   initSupabaseSyncSettings();
+  initFileBackupSettings();
   initGeoLocationSettings();
   initAccountManagementSettings();
 }
