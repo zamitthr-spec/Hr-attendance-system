@@ -548,9 +548,13 @@
       <button class="navitem" data-view="employees"><span class="ic">☰</span> الموظفون</button>
       <button class="navitem" data-view="reports"><span class="ic">▤</span> التقارير والتصدير</button>
       <button class="navitem" data-view="import"><span class="ic">⇩</span> استيراد من Excel</button>
-      <button class="navitem" data-view="settings"><span class="ic">⚙</span> الإعدادات</button>
+      <button class="navitem" id="nav-settings-item" data-view="settings"><span class="ic">⚙</span> الإعدادات</button>
     </nav>
-    <div class="sidebar-foot">تخزين محلي بالكامل (LocalStorage)<br>لا يتطلب اتصالاً بخادم</div>
+    <div class="sidebar-foot">
+      <div id="sidebar-user-label" style="color:#B8C0CB;margin-bottom:8px;"></div>
+      <button class="btn btn-sm" id="sidebar-logout-btn" type="button" style="width:100%;background:transparent;border:1px solid rgba(255,255,255,.25);color:#EDEFF2;">تسجيل الخروج</button>
+      <div style="margin-top:10px;">تخزين محلي بالكامل (LocalStorage)<br>لا يتطلب اتصالاً بخادم</div>
+    </div>
   </aside>
 
   <main class="main">
@@ -1037,11 +1041,26 @@
       </div>
 
       <div class="card" style="margin-top:18px;">
-        <h2>مواقع حضور الموظفين (النطاق الجغرافي)</h2>
-        <p class="hint" style="margin:-4px 0 12px;">تحديد نطاق الحضور الجغرافي لكل موظف مستقل تمامًا عن إنشاء حساب دخول له — يمكنك ضبط موقع أي موظف هنا سواء أنشأتم له حساب دخول لاحقًا أم لا.</p>
+        <h2>الهيكل التنظيمي ومواقع الحضور</h2>
+        <p class="hint" style="margin:-4px 0 12px;">حدّد الرتبة الإدارية لكل موظف ومديره المباشر (فكل مدير أو رئيس قسم له صلاحية على مرؤوسيه المحددين فقط، وليس على الجميع)، بالإضافة إلى نطاق حضوره الجغرافي إن وُجد. هذا مستقل تمامًا عن إنشاء حساب دخول له.</p>
         <div class="field">
           <label>اختر موظفًا</label>
           <select id="geo-employee-select"><option value="">— اختر موظفاً —</option></select>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>الرتبة الإدارية</label>
+            <select id="geo-org-level">
+              <option value="general_manager">مدير عام</option>
+              <option value="department_manager">مدير إدارة</option>
+              <option value="section_head">رئيس قسم</option>
+              <option value="employee" selected>موظف</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>مديره المباشر <span class="hint">(اختياري — يحدد نطاق صلاحية من فوقه)</span></label>
+            <select id="geo-manager"><option value="">— بلا مدير مباشر —</option></select>
+          </div>
         </div>
         <div class="form-row">
           <div class="field">
@@ -1069,10 +1088,6 @@
         <div id="geo-pickers" style="display:flex;gap:10px;flex-wrap:wrap;margin:-4px 0 14px;">
           <button class="btn btn-ghost btn-sm" id="geo-use-gps-btn" type="button">استخدام موقعي الحالي (GPS)</button>
           <button class="btn btn-ghost btn-sm" id="geo-pick-map-btn" type="button">اختيار من الخريطة</button>
-        </div>
-        <div class="field">
-          <label>المدير المباشر <span class="hint">(اختياري)</span></label>
-          <select id="geo-manager"><option value="">— بلا مدير مباشر —</option></select>
         </div>
         <button class="btn btn-primary btn-sm" id="geo-save-btn" type="button" disabled>حفظ</button>
         <div class="hint" id="geo-save-status" style="margin-top:10px;"></div>
@@ -1106,12 +1121,13 @@
           </div>
         </div>
         <div class="field">
-          <label>الصلاحية</label>
+          <label>صلاحية العمل على النظام</label>
           <select id="acc-role">
-            <option value="employee">موظف</option>
-            <option value="manager">مدير مباشر</option>
-            <option value="hr">موارد بشرية</option>
-            <option value="admin">مدير النظام</option>
+            <option value="view">عرض فقط</option>
+            <option value="reports">تقارير فقط</option>
+            <option value="edit">إدخال بيانات (إضافة وتعديل)</option>
+            <option value="manage">إدارة العمليات (إضافة وتعديل وحذف وتقارير)</option>
+            <option value="full_control">صلاحية كاملة (شاملة الإعدادات وإدارة الحسابات)</option>
           </select>
         </div>
         <button class="btn btn-primary btn-sm" id="acc-create-btn" type="button">إنشاء الحساب</button>
@@ -2569,6 +2585,7 @@ async function loadGeoEmployeeSettings(){
     saveBtn.disabled = true;
     ['geo-radius','geo-lat','geo-lng'].forEach(id=>{ document.getElementById(id).value=''; });
     document.getElementById('geo-attendance-mode').value = 'geofenced';
+    document.getElementById('geo-org-level').value = 'employee';
     document.getElementById('geo-manager').value = '';
     syncGeoModeFields();
     return;
@@ -2577,12 +2594,13 @@ async function loadGeoEmployeeSettings(){
   refreshGeoManagerOptions(empId);
   try{
     const { data, error } = await sbClient.from('employees')
-      .select('attendance_mode, geofence_lat, geofence_lng, geofence_radius_m, manager_id').eq('id', empId).maybeSingle();
+      .select('attendance_mode, geofence_lat, geofence_lng, geofence_radius_m, manager_id, org_level').eq('id', empId).maybeSingle();
     if(error) throw error;
     document.getElementById('geo-attendance-mode').value = (data && data.attendance_mode) || 'geofenced';
     document.getElementById('geo-radius').value = data && data.geofence_radius_m!=null ? data.geofence_radius_m : '';
     document.getElementById('geo-lat').value = data && data.geofence_lat!=null ? data.geofence_lat : '';
     document.getElementById('geo-lng').value = data && data.geofence_lng!=null ? data.geofence_lng : '';
+    document.getElementById('geo-org-level').value = (data && data.org_level) || 'employee';
     syncGeoModeFields();
     // manager select is repopulated async above; set its value once options land
     setTimeout(()=>{ document.getElementById('geo-manager').value = (data && data.manager_id) || ''; }, 300);
@@ -2594,6 +2612,7 @@ async function saveGeoEmployeeSettings(){
   const empId = document.getElementById('geo-employee-select').value;
   const statusEl = document.getElementById('geo-save-status');
   if(!empId){ statusEl.textContent = 'يرجى اختيار موظف أولاً'; return; }
+  const orgLevel = document.getElementById('geo-org-level').value;
   const mode = document.getElementById('geo-attendance-mode').value;
   const radius = document.getElementById('geo-radius').value;
   const lat = document.getElementById('geo-lat').value;
@@ -2606,6 +2625,7 @@ async function saveGeoEmployeeSettings(){
   statusEl.textContent = 'جارٍ الحفظ...';
   try{
     const { error } = await sbClient.from('employees').update({
+      org_level: orgLevel,
       attendance_mode: mode,
       geofence_radius_m: mode==='field' ? null : radius,
       geofence_lat: mode==='field' ? null : lat,
@@ -2613,7 +2633,7 @@ async function saveGeoEmployeeSettings(){
       manager_id: managerId,
     }).eq('id', empId);
     if(error) throw error;
-    statusEl.textContent = 'تم حفظ إعدادات الموقع لهذا الموظف بنجاح.';
+    statusEl.textContent = 'تم حفظ بيانات الهيكل التنظيمي والموقع لهذا الموظف بنجاح.';
   }catch(e){
     statusEl.textContent = 'تعذّر الحفظ: ' + (e && e.message ? e.message : 'خطأ غير معروف');
   }
@@ -4053,19 +4073,58 @@ function renderImportView(){
 })();
 
 /* ======================= INIT (hr/admin — the full existing app) ======================= */
-// Wrapped in a function now: it only runs once a signed-in hr/admin
-// account has been confirmed by the auth gate below, instead of running
-// unconditionally for anyone who opens the page.
+// Wrapped in a function now: it only runs once a signed-in web user has
+// been confirmed by the auth gate below, instead of running unconditionally
+// for anyone who opens the page.
+/* ---- Permission levels (5): what actions a login may take ----
+   full_control  -> add, edit, delete, reports, settings, manage accounts
+   manage        -> add, edit, delete, reports
+   edit          -> add, edit
+   reports       -> view + reports
+   view          -> view only
+   NOTE: this is a first pass — it gates the most sensitive area (Settings,
+   including account management) and exposes hasCapability() for further
+   gating of individual add/edit/delete controls across the rest of the app. */
+const CAPABILITY_MATRIX = {
+  full_control: ['add','edit','delete','reports','settings','manage_accounts'],
+  manage: ['add','edit','delete','reports'],
+  edit: ['add','edit'],
+  reports: ['reports'],
+  view: [],
+};
+const ROLE_LABELS_AR = {
+  full_control: 'صلاحية كاملة',
+  manage: 'إدارة العمليات',
+  edit: 'إدخال بيانات',
+  reports: 'تقارير فقط',
+  view: 'عرض فقط',
+};
+const ORG_LEVEL_LABELS_AR = {
+  general_manager: 'مدير عام',
+  department_manager: 'مدير إدارة',
+  section_head: 'رئيس قسم',
+  employee: 'موظف',
+};
+function hasCapability(cap){
+  const role = currentProfile && currentProfile.role;
+  return !!(role && CAPABILITY_MATRIX[role] && CAPABILITY_MATRIX[role].indexOf(cap) !== -1);
+}
+
 let sijilAppInitialized = false;
 function initHrAdminApp(){
   if(sijilAppInitialized) return;
   sijilAppInitialized = true;
+  document.getElementById('sidebar-user-label').textContent =
+    (currentProfile.full_name || '') + ' — ' + (ROLE_LABELS_AR[currentProfile.role] || currentProfile.role);
+  document.getElementById('sidebar-logout-btn').addEventListener('click', logoutCurrentUser);
+  const settingsNav = document.getElementById('nav-settings-item');
+  if(!hasCapability('settings')) settingsNav.style.display = 'none';
   migrateEmployees();
   renderOverview();
   renderTxView();
   renderEmployees();
   renderReportsSetup();
-  renderSettingsView();
+  if(hasCapability('settings')) renderSettingsView();
   checkForRemoteUpdatesOnLoad();
   document.addEventListener('visibilitychange', function(){
     if(document.visibilityState==='visible') checkForRemoteUpdatesOnLoad();
@@ -4088,16 +4147,11 @@ function showSignupError(msg){
 }
 
 function routeByRole(role){
-  if(role==='owner' || role==='admin' || role==='hr'){
-    document.getElementById('app-shell').style.display = '';
-    initHrAdminApp();
-  } else {
-    // manager/employee accounts use the dedicated mobile app now — this web
-    // system is for owner/admin/hr only. Sign them back out rather than
-    // showing an empty shell.
-    showAuthError('هذا الحساب مخصَّص لتطبيق الجوال (الحضور والانصراف والطلبات والموافقات) — يرجى استخدام التطبيق بدل هذه الصفحة.');
-    sbClient.auth.signOut();
-  }
+  // Every one of the 5 permission levels (full_control/manage/edit/reports/view)
+  // is a web-system user — the level only controls which *actions* they can
+  // take inside the system, not whether they can open it at all.
+  document.getElementById('app-shell').style.display = '';
+  initHrAdminApp();
 }
 
 async function handleAuthedSession(session){
@@ -4110,9 +4164,7 @@ async function handleAuthedSession(session){
     return;
   }
   currentProfile = profile;
-  if(profile.role==='owner' || profile.role==='admin' || profile.role==='hr'){
-    document.getElementById('auth-login-overlay').style.display = 'none';
-  }
+  document.getElementById('auth-login-overlay').style.display = 'none';
   routeByRole(profile.role);
 }
 
