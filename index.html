@@ -1292,6 +1292,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const SIJIL_BACKUP_TABLE = 'sijil_backups';
 const LS_LAST_APPLIED_REMOTE = 'sijil_last_applied_remote_v1'; // updated_at of the remote row this device's data currently matches
 const LS_DIRTY = 'sijil_local_dirty_v1'; // '1' whenever this device has local changes not yet pushed
+const LS_OWNER_COMPANY = 'sijil_owner_company_id_v1'; // which company's data is currently sitting in this browser's LocalStorage
 
 let sbClient = null;
 try{
@@ -1302,7 +1303,7 @@ try{
 
 function collectSijilSnapshot(){
   const data = {};
-  const skip = [LS_LAST_APPLIED_REMOTE, LS_DIRTY];
+  const skip = [LS_LAST_APPLIED_REMOTE, LS_DIRTY, LS_OWNER_COMPANY];
   for(let i=0;i<localStorage.length;i++){
     const k = localStorage.key(i);
     if(k && k.indexOf('sijil_')===0 && skip.indexOf(k)===-1) data[k] = localStorage.getItem(k);
@@ -1311,11 +1312,50 @@ function collectSijilSnapshot(){
 }
 // Restores a previously-collected snapshot back into LocalStorage.
 function applySijilSnapshot(data){
-  const skip = [LS_LAST_APPLIED_REMOTE, LS_DIRTY];
+  const skip = [LS_LAST_APPLIED_REMOTE, LS_DIRTY, LS_OWNER_COMPANY];
   Object.keys(data||{}).forEach(k=>{
     if(k.indexOf('sijil_')===0 && skip.indexOf(k)===-1) localStorage.setItem(k, data[k]);
   });
 }
+// Wipes every LocalStorage key this app owns (except the tenant marker
+// itself, which the caller updates separately) — used when switching to a
+// different company's account on this browser, so no trace of the previous
+// tenant's data can ever be shown, even for an instant.
+function wipeAllSijilLocalData(){
+  const keep = [LS_OWNER_COMPANY];
+  const toRemove = [];
+  for(let i=0;i<localStorage.length;i++){
+    const k = localStorage.key(i);
+    if(k && k.indexOf('sijil_')===0 && keep.indexOf(k)===-1) toRemove.push(k);
+  }
+  toRemove.forEach(k=>localStorage.removeItem(k));
+}
+// Runs once right after login, BEFORE the app renders anything. LocalStorage
+// is per-browser, not per-company, so if a different company last used this
+// same browser, its leftover data must never be shown to this account.
+// - If the marker already matches this company: nothing to do.
+// - Otherwise: wipe local data first (never show stale/foreign data, even
+//   briefly), then try to pull this company's own backup from Supabase; if
+//   it has none yet (first-ever login from any device), it starts blank.
+async function ensureLocalDataMatchesCompany(companyId){
+  const marker = localStorage.getItem(LS_OWNER_COMPANY);
+  if(marker === companyId) return;
+
+  wipeAllSijilLocalData();
+
+  if(sbClient){
+    try{
+      const { data, error } = await sbClient.from(SIJIL_BACKUP_TABLE).select('data, updated_at').eq('company_id', companyId).maybeSingle();
+      if(!error && data){
+        applySijilSnapshot(data.data);
+        localStorage.setItem(LS_LAST_APPLIED_REMOTE, data.updated_at);
+      }
+    }catch(e){ /* offline on first load — proceed with a blank slate for this company */ }
+  }
+  localStorage.setItem(LS_OWNER_COMPANY, companyId);
+  clearSijilDirty();
+}
+
 function isSijilDirty(){ return localStorage.getItem(LS_DIRTY)==='1'; }
 function markSijilDirty(){ localStorage.setItem(LS_DIRTY, '1'); }
 function clearSijilDirty(){ localStorage.setItem(LS_DIRTY, '0'); }
@@ -4164,6 +4204,12 @@ async function handleAuthedSession(session){
     return;
   }
   currentProfile = profile;
+  // Critical: never render anything until we're sure the data sitting in
+  // this browser actually belongs to THIS company (see comment above
+  // ensureLocalDataMatchesCompany) — otherwise a previous tenant's data
+  // could flash on screen, or worse, get shown as if it were this one's.
+  document.getElementById('auth-login-btn').textContent = 'جارٍ تحميل بيانات شركتك...';
+  await ensureLocalDataMatchesCompany(profile.company_id);
   document.getElementById('auth-login-overlay').style.display = 'none';
   routeByRole(profile.role);
 }
@@ -4231,6 +4277,11 @@ document.getElementById('auth-signup-form').addEventListener('submit', async fun
 
 async function logoutCurrentUser(){
   if(sbClient) await sbClient.auth.signOut();
+  // Defense in depth for shared/public computers: don't leave this
+  // company's data sitting in LocalStorage after signing out. The next
+  // login (same company or a different one) re-syncs from Supabase anyway.
+  wipeAllSijilLocalData();
+  localStorage.removeItem(LS_OWNER_COMPANY);
   location.reload();
 }
 
