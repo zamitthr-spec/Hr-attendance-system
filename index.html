@@ -2566,10 +2566,12 @@ function renderSettingsView(){
 async function migrateLocalEmployeesToSupabase(){
   const statusEl = document.getElementById('acc-migrate-status');
   if(!sbClient){ statusEl.textContent = 'تعذّر الاتصال بـ Supabase'; return; }
+  if(!currentProfile || !currentProfile.company_id){ statusEl.textContent = 'تعذّر تحديد شركتك — أعد تسجيل الدخول'; return; }
   if(!employees || employees.length===0){ statusEl.textContent = 'لا يوجد موظفون في النظام الحالي لمزامنتهم'; return; }
   statusEl.textContent = 'جارٍ المزامنة...';
   try{
     const rows = employees.map(e=>({
+      company_id: currentProfile.company_id,
       code: e.code,
       name: e.name,
       department: e.dept || null,
@@ -2577,7 +2579,7 @@ async function migrateLocalEmployeesToSupabase(){
       hire_date: e.hire || null,
       active: true,
     }));
-    const { error } = await sbClient.from('employees').upsert(rows, { onConflict:'code' });
+    const { error } = await sbClient.from('employees').upsert(rows, { onConflict:'company_id,code' });
     if(error) throw error;
     statusEl.textContent = `تمت مزامنة ${rows.length} موظف بنجاح. يمكنك الآن ضبط مواقعهم وإنشاء حسابات لهم أدناه.`;
     refreshGeoEmployeeOptions();
