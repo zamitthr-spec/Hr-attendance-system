@@ -1099,6 +1099,7 @@
         <div class="field">
           <label>اختر من الموظفين المُزامَنين <span class="hint">(اختياري — أو اترك على "موظف جديد" واملأ الاسم/الرقم الوظيفي يدوياً)</span></label>
           <select id="acc-existing-employee"><option value="">— موظف جديد —</option></select>
+          <span class="hint" id="acc-existing-employee-hint" style="color:var(--rust);display:block;margin-top:4px;"></span>
         </div>
         <div class="form-row">
           <div class="field">
@@ -2780,8 +2781,12 @@ async function refreshExistingEmployeeOptions(){
     if(error) throw error;
     const unlinked = (data||[]).filter(e=> !e.profiles || e.profiles.length===0);
     const current = sel.value;
+    const noSyncedYet = (data||[]).length===0;
     sel.innerHTML = '<option value="">— موظف جديد —</option>' + unlinked.map(e=>`<option value="${e.id}" data-name="${e.name}" data-code="${e.code}">${e.name} (${e.code})</option>`).join('');
     sel.value = current;
+    document.getElementById('acc-existing-employee-hint').textContent = noSyncedYet
+      ? '⚠️ لا يوجد موظفون مُزامَنون بعد — اضغط "مزامنة الموظفين الحاليين الآن" في البطاقة أعلاه أولاً، ثم عد إلى هنا.'
+      : '';
   }catch(e){ /* silent — non-critical */ }
 }
 function initAccountManagementSettings(){
