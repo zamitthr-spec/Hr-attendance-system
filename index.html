@@ -4217,6 +4217,13 @@ async function handleAuthedSession(session){
   // could flash on screen, or worse, get shown as if it were this one's.
   document.getElementById('auth-login-btn').textContent = 'جارٍ تحميل بيانات شركتك...';
   await ensureLocalDataMatchesCompany(profile.company_id);
+  // CRITICAL: `employees`/`transactions` were already loaded from
+  // LocalStorage at page-parse time, BEFORE this async company-data sync
+  // ever ran — reassign them now from the (possibly just-wiped-and-repulled)
+  // LocalStorage, or every render function would keep showing whatever
+  // stale/empty snapshot existed the instant the page first loaded.
+  employees = loadEmployees();
+  transactions = loadTx();
   document.getElementById('auth-login-overlay').style.display = 'none';
   routeByRole(profile.role);
 }
